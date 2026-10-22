@@ -15,7 +15,7 @@ import { AlergiaDuplicadaError } from '../errors/alergia-duplicada.error.js';
 
 export interface CrearHistoriaClinicaProps {
   pacienteId: PacienteId;
-  odontologoResponsableId: OdontologoId;
+  odontologoResponsableId?: OdontologoId;
   /** Si se omite, se inicia con todos los campos en NO_EVALUADO. */
   antecedentes?: Antecedentes;
   alergias?: Alergia[];
@@ -122,7 +122,7 @@ export class HistoriaClinica {
     return new HistoriaClinica({
       id,
       pacienteId: props.pacienteId,
-      odontologoResponsableId: props.odontologoResponsableId,
+      odontologoResponsableId: props.odontologoResponsableId ?? odontologoId,
       estado: EstadoHistoria.ACTIVA,
       antecedentes: props.antecedentes ?? Antecedentes.porDefecto(),
       alergias: props.alergias ?? [],
