@@ -23,6 +23,9 @@ import {
   CambiarEstadoHistoriaUseCase,
 } from './application/index.js';
 
+import { HistoriasClinicasController } from './infrastructure/http/controllers/historias-clinicas.controller.js';
+import { OdontologoAuthGuard } from './infrastructure/http/guards/odontologo-auth.guard.js';
+
 const USE_CASES = [
   CrearHistoriaClinicaUseCase,
   ObtenerHistoriaPorIdUseCase,
@@ -40,7 +43,9 @@ const USE_CASES = [
       { name: HistoriaClinicaDocument.name, schema: HistoriaClinicaSchema },
     ]),
   ],
+  controllers: [HistoriasClinicasController],
   providers: [
+    OdontologoAuthGuard,
     {
       provide: HISTORIA_CLINICA_REPOSITORY,
       useClass: MongoHistoriaClinicaRepository,
@@ -55,6 +60,6 @@ const USE_CASES = [
     },
     ...USE_CASES,
   ],
-  exports: [HISTORIA_CLINICA_REPOSITORY, ...USE_CASES],
+  exports: [HISTORIA_CLINICA_REPOSITORY, OdontologoAuthGuard, ...USE_CASES],
 })
 export class HistoriasClinicasModule {}

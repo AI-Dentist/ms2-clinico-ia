@@ -15,20 +15,21 @@ describe('MockOdontologoContextAdapter', () => {
     process.env.NODE_ENV = originalEnv;
   });
 
-  it('debe resolver tokens fijos de desarrollo autorizados', async () => {
+  it('debe resolver tokens de la lista blanca sintética autorizada', async () => {
     const contexto = await adapter.obtenerOdontologoActual('token_valido');
     expect(contexto.odontologoId).toBe('od_dev_001');
 
     const contextoEditor = await adapter.obtenerOdontologoActual('token_valido_editor');
     expect(contextoEditor.odontologoId).toBe('od_editor_005');
+
+    const contextoE2e = await adapter.obtenerOdontologoActual('token_e2e_principal');
+    expect(contextoE2e.odontologoId).toBe('od_e2e_001');
   });
 
-  it('debe resolver tokens con patrón dev-token-<id> o test-token-<id>', async () => {
-    const contexto = await adapter.obtenerOdontologoActual('dev-token-od_especialista_09');
-    expect(contexto.odontologoId).toBe('od_especialista_09');
-
-    const contextoTest = await adapter.obtenerOdontologoActual('test-token-od_test_88');
-    expect(contextoTest.odontologoId).toBe('od_test_88');
+  it('debe rechazar tokens con patrones dinámicos no registrados explícitamente', async () => {
+    await expect(adapter.obtenerOdontologoActual('dev-token-od_no_registrado')).rejects.toThrow(
+      AutenticacionRequeridaError,
+    );
   });
 
   it('debe rechazar tokens arbitrarios o no autorizados con AutenticacionRequeridaError', async () => {

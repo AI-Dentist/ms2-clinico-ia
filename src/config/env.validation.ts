@@ -9,7 +9,7 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
   const rawPort = config.PORT ?? 3001;
   const port = Number(rawPort);
   if (isNaN(port) || port <= 0 || port > 65535) {
-    errors.push(`Variable 'PORT' inválida (${config.PORT}). Debe ser un número entre 1 y 65535.`);
+    errors.push(`Variable 'PORT' inválida (${String(config.PORT)}). Debe ser un número entre 1 y 65535.`);
   }
 
   const mongoUri = config.MONGODB_URI;
