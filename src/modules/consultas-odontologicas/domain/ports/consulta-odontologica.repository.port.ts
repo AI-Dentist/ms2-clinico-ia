@@ -52,3 +52,6 @@ export interface IConsultaOdontologicaRepositoryPort {
     offset?: number
   ): Promise<ListadoConsultasResultado>;
 }
+
+/** Token de inyección de dependencias para IConsultaOdontologicaRepositoryPort. */
+export const CONSULTA_ODONTOLOGICA_REPOSITORY = Symbol('IConsultaOdontologicaRepositoryPort');

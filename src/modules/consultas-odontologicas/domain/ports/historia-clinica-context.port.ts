@@ -17,3 +17,6 @@ export interface ResumenHistoriaClinicaParaApertura {
 export interface IHistoriaClinicaContextPort {
   obtenerResumenParaApertura(historiaClinicaId: string): Promise<ResumenHistoriaClinicaParaApertura | null>;
 }
+
+/** Token de inyección de dependencias para IHistoriaClinicaContextPort. */
+export const HISTORIA_CLINICA_CONTEXT_PORT = Symbol('IHistoriaClinicaContextPort');

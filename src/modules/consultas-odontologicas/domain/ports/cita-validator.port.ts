@@ -12,3 +12,6 @@ export interface ResultadoValidacionCita {
 export interface ICitaValidatorPort {
   validarCitaParaAtencion(citaId: string, pacienteId: string): Promise<ResultadoValidacionCita>;
 }
+
+/** Token de inyección de dependencias para ICitaValidatorPort. */
+export const CITA_VALIDATOR_PORT = Symbol('ICitaValidatorPort');
