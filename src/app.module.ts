@@ -5,6 +5,7 @@ import { AppService } from './app.service.js';
 import { validateEnv } from './config/env.validation.js';
 import { DatabaseModule } from './infrastructure/database/database.module.js';
 import { HistoriasClinicasModule } from './modules/historias-clinicas/historias-clinicas.module.js';
+import { ConsultasOdontologicasModule } from './modules/consultas-odontologicas/consultas-odontologicas.module.js';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { HistoriasClinicasModule } from './modules/historias-clinicas/historias-
     }),
     DatabaseModule,
     HistoriasClinicasModule,
+    ConsultasOdontologicasModule,
   ],
   controllers: [AppController],
   providers: [AppService],
