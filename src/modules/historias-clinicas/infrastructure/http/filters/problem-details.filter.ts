@@ -15,6 +15,17 @@ import { TransicionEstadoInvalidaError } from '../../../domain/errors/transicion
 import { AlergiaDuplicadaError } from '../../../domain/errors/alergia-duplicada.error.js';
 import { PacienteInexistenteError } from '../../../application/errors/paciente-inexistente.error.js';
 import { AutenticacionRequeridaError } from '../../../application/errors/autenticacion-requerida.error.js';
+import { ConsultaNoEncontradaError } from '../../../../consultas-odontologicas/domain/errors/consulta-no-encontrada.error.js';
+import { ConflictoConcurrenteConsultaError } from '../../../../consultas-odontologicas/domain/errors/conflicto-concurrente-consulta.error.js';
+import { CitaInvalidaParaConsultaError } from '../../../../consultas-odontologicas/domain/errors/cita-invalida-para-consulta.error.js';
+import { HistoriaClinicaNoHabilitadaError } from '../../../../consultas-odontologicas/domain/errors/historia-clinica-no-habilitada.error.js';
+import { ConsultaNoEditableError } from '../../../../consultas-odontologicas/domain/errors/consulta-no-editable.error.js';
+import { RequisitosCierreConsultaIncumplidosError } from '../../../../consultas-odontologicas/domain/errors/requisitos-cierre-consulta-incumplidos.error.js';
+import { JustificacionCancelacionRequeridaError } from '../../../../consultas-odontologicas/domain/errors/justificacion-cancelacion-requerida.error.js';
+import { TransicionEstadoConsultaInvalidaError } from '../../../../consultas-odontologicas/domain/errors/transicion-estado-consulta-invalida.error.js';
+import { PiezaDentalFDIInvalidaError } from '../../../../consultas-odontologicas/domain/errors/pieza-dental-fdi-invalida.error.js';
+import { PacienteNoCoincideError } from '../../../../consultas-odontologicas/application/errors/paciente-no-coincide.error.js';
+import { AutenticacionRequeridaError as AutenticacionRequeridaConsultasError } from '../../../../consultas-odontologicas/application/errors/autenticacion-requerida.error.js';
 
 export interface InvalidParam {
   name: string;
@@ -97,6 +108,75 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       title = 'Alergia no encontrada';
       detail = exception.message;
       type = 'https://api.odontoclinic.local/errors/not-found';
+    } else if (exception instanceof ConsultaNoEncontradaError) {
+      status = HttpStatus.NOT_FOUND;
+      title = 'Consulta odontológica no encontrada';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/not-found';
+    } else if (exception instanceof ConflictoConcurrenteConsultaError) {
+      status = HttpStatus.CONFLICT;
+      title = 'Conflicto de concurrencia optimista en consulta';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/conflict';
+    } else if (exception instanceof CitaInvalidaParaConsultaError) {
+      const msg = exception.message.toLowerCase();
+      if (
+        msg.includes('duplicad') ||
+        msg.includes('asociada') ||
+        msg.includes('vinculada') ||
+        msg.includes('ya fue atendida') ||
+        msg.includes('colisión') ||
+        msg.includes('clave duplicada')
+      ) {
+        status = HttpStatus.CONFLICT;
+        title = 'Cita odontológica ya asignada';
+        type = 'https://api.odontoclinic.local/errors/conflict';
+      } else {
+        status = HttpStatus.UNPROCESSABLE_ENTITY;
+        title = 'Cita inválida para consulta';
+        type = 'https://api.odontoclinic.local/errors/invalid-appointment';
+      }
+      detail = exception.message;
+    } else if (exception instanceof AutenticacionRequeridaConsultasError) {
+      status = HttpStatus.UNAUTHORIZED;
+      title = 'Autenticación requerida';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/unauthorized';
+    } else if (exception instanceof HistoriaClinicaNoHabilitadaError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Historia clínica no habilitada';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/chart-not-eligible';
+    } else if (exception instanceof PacienteNoCoincideError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Paciente no coincide con la historia clínica';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/patient-mismatch';
+    } else if (exception instanceof ConsultaNoEditableError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Consulta no editable';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/uneditable-consultation';
+    } else if (exception instanceof RequisitosCierreConsultaIncumplidosError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Requisitos de cierre clínico incumplidos';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/closure-requirements-unmet';
+    } else if (exception instanceof JustificacionCancelacionRequeridaError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Justificación de cancelación requerida';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/cancellation-reason-required';
+    } else if (exception instanceof TransicionEstadoConsultaInvalidaError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Transición de estado de consulta inválida';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/invalid-state-transition';
+    } else if (exception instanceof PiezaDentalFDIInvalidaError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Pieza dental FDI inválida';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/invalid-fdi-tooth';
     } else if (exception instanceof HttpException) {
       // 2. Excepciones HTTP estándar de NestJS (ValidationPipe, etc.)
       status = exception.getStatus();

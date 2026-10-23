@@ -46,6 +46,21 @@ describe('MongoHistoriaClinicaRepository (Integration Tests)', () => {
     // 2. Conectar a la base de datos de prueba
     connection = await mongoose.createConnection(testMongoUri).asPromise();
 
+    // SALVAGUARDA DE AISLAMIENTO EN TIEMPO DE EJECUCIÓN
+    const activeDbName = connection.db?.databaseName;
+    if (
+      !activeDbName ||
+      !activeDbName.startsWith('test-clinica-int-') ||
+      activeDbName === 'clinica-dentalDB' ||
+      activeDbName === 'admin' ||
+      activeDbName === 'local'
+    ) {
+      await connection.close();
+      throw new Error(
+        `CRÍTICO: Abortando suite de integración MongoHistoriaClinicaRepository. Base de datos no autorizada: '${activeDbName}'. Solo se permiten bases temporales 'test-clinica-int-*'.`,
+      );
+    }
+
     // 3. Registrar modelo y compilar índices (incluyendo el índice único en pacienteId)
     model = connection.model(
       HistoriaClinicaDocument.name,
@@ -60,7 +75,7 @@ describe('MongoHistoriaClinicaRepository (Integration Tests)', () => {
     if (connection) {
       // SALVAGUARDA ESTRICTA de limpieza: verificar nombre antes de drop
       const currentDb = connection.db?.databaseName;
-      if (currentDb && currentDb.startsWith('test-clinica-int-')) {
+      if (currentDb && currentDb === testDbName && currentDb.startsWith('test-clinica-int-')) {
         await connection.dropDatabase();
       }
       await connection.close();
@@ -69,6 +84,10 @@ describe('MongoHistoriaClinicaRepository (Integration Tests)', () => {
 
   beforeEach(async () => {
     // Limpieza de colecciones en la base temporal entre cada prueba
+    const currentDb = connection.db?.databaseName;
+    if (!currentDb || !currentDb.startsWith('test-clinica-int-') || currentDb === 'clinica-dentalDB') {
+      throw new Error(`CRÍTICO: Operación deleteMany bloqueada en base no autorizada: '${currentDb}'`);
+    }
     await model.deleteMany({});
   });
 

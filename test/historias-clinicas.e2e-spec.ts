@@ -5,7 +5,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
 import request from 'supertest';
 import type { Connection } from 'mongoose';
-import { AppModule } from '../src/app.module.js';
+// Note: AppModule is imported dynamically inside beforeAll after setting process.env.MONGODB_URI
 import { ProblemDetailsFilter } from '../src/modules/historias-clinicas/infrastructure/http/filters/problem-details.filter.js';
 import { HistoriaClinicaDocument } from '../src/modules/historias-clinicas/infrastructure/persistence/mongo/schemas/historia-clinica.schema.js';
 
@@ -34,6 +34,8 @@ describe('HistoriasClinicas API REST (e2e)', () => {
     process.env.MONGODB_URI = `mongodb://127.0.0.1:27017/${testDbName}`;
     process.env.NODE_ENV = 'test';
 
+    const { AppModule } = await import('../src/app.module.js');
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -55,6 +57,21 @@ describe('HistoriasClinicas API REST (e2e)', () => {
 
     connection = app.get<Connection>(getConnectionToken());
 
+    // SALVAGUARDA DE AISLAMIENTO EN TIEMPO DE EJECUCIÓN
+    const activeDbName = connection.db?.databaseName;
+    if (
+      !activeDbName ||
+      !activeDbName.startsWith('test-clinica-e2e-') ||
+      activeDbName === 'clinica-dentalDB' ||
+      activeDbName === 'admin' ||
+      activeDbName === 'local'
+    ) {
+      await app.close();
+      throw new Error(
+        `CRÍTICO: Abortando suite HistoriasClinicas E2E. Base de datos resuelta no autorizada: '${activeDbName}'. Solo se permiten bases temporales que inicien con 'test-clinica-e2e-'. Operaciones de escritura abortadas para proteger clinica-dentalDB.`,
+      );
+    }
+
     // Sincronizar índices únicos
     const historiaModel = connection.model(HistoriaClinicaDocument.name);
     await historiaModel.syncIndexes();
@@ -65,7 +82,7 @@ describe('HistoriasClinicas API REST (e2e)', () => {
       if (connection) {
         const dbName = connection.db?.databaseName;
         // SALVAGUARDA ESTRICTA DE LIMPIEZA
-        if (dbName && dbName.startsWith('test-clinica-e2e-')) {
+        if (dbName && dbName === testDbName && dbName.startsWith('test-clinica-e2e-')) {
           await connection.dropDatabase();
         }
       }

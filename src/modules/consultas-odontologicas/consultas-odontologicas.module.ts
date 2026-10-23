@@ -25,6 +25,9 @@ import {
   CancelarConsultaUseCase,
 } from './application/index.js';
 
+import { ConsultasOdontologicasController } from './infrastructure/http/controllers/consultas-odontologicas.controller.js';
+import { OdontologoAuthGuard } from './infrastructure/http/guards/odontologo-auth.guard.js';
+
 const USE_CASES = [
   RegistrarAperturaConsultaUseCase,
   ObtenerConsultaPorIdUseCase,
@@ -41,8 +44,9 @@ const USE_CASES = [
     ]),
     HistoriasClinicasModule,
   ],
-  controllers: [],
+  controllers: [ConsultasOdontologicasController],
   providers: [
+    OdontologoAuthGuard,
     {
       provide: CONSULTA_ODONTOLOGICA_REPOSITORY,
       useClass: MongoConsultaOdontologicaRepository,

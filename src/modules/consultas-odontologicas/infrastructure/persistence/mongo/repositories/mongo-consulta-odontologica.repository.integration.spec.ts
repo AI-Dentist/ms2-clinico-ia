@@ -48,6 +48,21 @@ describe('MongoConsultaOdontologicaRepository (Integration Tests)', () => {
     const testMongoUri = `mongodb://127.0.0.1:27017/${testDbName}`;
     connection = await mongoose.createConnection(testMongoUri).asPromise();
 
+    // SALVAGUARDA DE AISLAMIENTO EN TIEMPO DE EJECUCIÓN
+    const activeDbName = connection.db?.databaseName;
+    if (
+      !activeDbName ||
+      !activeDbName.startsWith('test-consultas-int-') ||
+      activeDbName === 'clinica-dentalDB' ||
+      activeDbName === 'admin' ||
+      activeDbName === 'local'
+    ) {
+      await connection.close();
+      throw new Error(
+        `CRÍTICO: Abortando suite de integración MongoConsultaOdontologicaRepository. Base de datos no autorizada: '${activeDbName}'. Solo se permiten bases temporales 'test-consultas-int-*'.`,
+      );
+    }
+
     model = connection.model(
       ConsultaOdontologicaDocument.name,
       ConsultaOdontologicaSchema
@@ -61,7 +76,7 @@ describe('MongoConsultaOdontologicaRepository (Integration Tests)', () => {
   afterAll(async () => {
     if (connection) {
       const currentDb = connection.db?.databaseName;
-      if (currentDb && currentDb.startsWith('test-consultas-int-')) {
+      if (currentDb && currentDb === testDbName && currentDb.startsWith('test-consultas-int-')) {
         await connection.dropDatabase();
       }
       await connection.close();
@@ -69,6 +84,10 @@ describe('MongoConsultaOdontologicaRepository (Integration Tests)', () => {
   });
 
   beforeEach(async () => {
+    const currentDb = connection.db?.databaseName;
+    if (!currentDb || !currentDb.startsWith('test-consultas-int-') || currentDb === 'clinica-dentalDB') {
+      throw new Error(`CRÍTICO: Operación deleteMany bloqueada en base no autorizada: '${currentDb}'`);
+    }
     await model.deleteMany({});
   });
 
