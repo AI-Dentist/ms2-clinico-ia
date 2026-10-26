@@ -13,6 +13,8 @@ import {
   collection: 'odontograma_revisiones',
   timestamps: false,
   versionKey: false,
+  autoIndex: false,
+  autoCreate: false,
 })
 export class RevisionOdontogramaDocument {
   @Prop({ type: String, required: true })

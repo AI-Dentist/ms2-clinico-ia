@@ -6,6 +6,7 @@ import { validateEnv } from './config/env.validation.js';
 import { DatabaseModule } from './infrastructure/database/database.module.js';
 import { HistoriasClinicasModule } from './modules/historias-clinicas/historias-clinicas.module.js';
 import { ConsultasOdontologicasModule } from './modules/consultas-odontologicas/consultas-odontologicas.module.js';
+import { OdontogramasModule } from './modules/odontogramas/odontogramas.module.js';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ConsultasOdontologicasModule } from './modules/consultas-odontologicas/
     DatabaseModule,
     HistoriasClinicasModule,
     ConsultasOdontologicasModule,
+    OdontogramasModule,
   ],
   controllers: [AppController],
   providers: [AppService],

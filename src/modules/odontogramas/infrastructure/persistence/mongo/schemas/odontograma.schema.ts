@@ -8,6 +8,8 @@ import {
   collection: 'odontogramas',
   timestamps: false,
   versionKey: false,
+  autoIndex: false,
+  autoCreate: false,
 })
 export class OdontogramaDocument {
   @Prop({ type: String, required: true })

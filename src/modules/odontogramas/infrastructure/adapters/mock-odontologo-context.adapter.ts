@@ -28,12 +28,23 @@ export class MockOdontologoContextAdapter implements IOdontologoContextPort {
     ['token_e2e_secundario', 'od_e2e_002'],
   ]);
 
-  async obtenerOdontologoActual(token?: string): Promise<OdontologoContexto> {
-    if (process.env.NODE_ENV === 'production') {
+  private static readonly ENTORNOS_PERMITIDOS = ['development', 'test'];
+
+  constructor() {
+    this.validarEntornoSeguro();
+  }
+
+  private validarEntornoSeguro(): void {
+    const env = process.env.NODE_ENV;
+    if (!env || !MockOdontologoContextAdapter.ENTORNOS_PERMITIDOS.includes(env)) {
       throw new Error(
-        'CRÍTICO: MockOdontologoContextAdapter no está permitido en entornos de producción.'
+        `CRÍTICO: MockOdontologoContextAdapter deshabilitado por política de seguridad. Solo está permitido en entornos 'development' o 'test' (entorno actual: '${env || 'no configurado'}').`
       );
     }
+  }
+
+  async obtenerOdontologoActual(token?: string): Promise<OdontologoContexto> {
+    this.validarEntornoSeguro();
 
     const t = token?.trim();
     if (!t) {
@@ -43,7 +54,7 @@ export class MockOdontologoContextAdapter implements IOdontologoContextPort {
     const odontologoId = this.tokensPermitidos.get(t);
     if (!odontologoId) {
       this.logger.warn(
-        `Intento de acceso denegado: token '${t}' no autorizado en la lista blanca sintética.`
+        'Intento de acceso denegado: token no autorizado en la lista blanca sintética.'
       );
       throw new AutenticacionRequeridaError('Token de autenticación inválido o no reconocido.');
     }
