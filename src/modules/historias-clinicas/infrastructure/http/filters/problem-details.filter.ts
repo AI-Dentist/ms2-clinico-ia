@@ -26,6 +26,18 @@ import { TransicionEstadoConsultaInvalidaError } from '../../../../consultas-odo
 import { PiezaDentalFDIInvalidaError } from '../../../../consultas-odontologicas/domain/errors/pieza-dental-fdi-invalida.error.js';
 import { PacienteNoCoincideError } from '../../../../consultas-odontologicas/application/errors/paciente-no-coincide.error.js';
 import { AutenticacionRequeridaError as AutenticacionRequeridaConsultasError } from '../../../../consultas-odontologicas/application/errors/autenticacion-requerida.error.js';
+import { OdontogramaNoEncontradoError } from '../../../../odontogramas/domain/errors/odontograma-no-encontrado.error.js';
+import { OdontogramaDuplicadoError } from '../../../../odontogramas/domain/errors/odontograma-duplicado.error.js';
+import { ConflictoConcurrenteOdontogramaError } from '../../../../odontogramas/domain/errors/conflicto-concurrente-odontograma.error.js';
+import { PiezaDentalOdontogramaDuplicadaError } from '../../../../odontogramas/domain/errors/pieza-dental-odontograma-duplicada.error.js';
+import { EstadoAnatomicoIncompatibleError } from '../../../../odontogramas/domain/errors/estado-anatomico-incompatible.error.js';
+import { SuperficieIncisalIncompatibleError } from '../../../../odontogramas/domain/errors/superficie-incisal-incompatible.error.js';
+import { EnmiendaCorrectivaInvalidaError } from '../../../../odontogramas/domain/errors/enmienda-correctiva-invalida.error.js';
+import { RevisionInvalidaError } from '../../../../odontogramas/application/errors/revision-invalida.error.js';
+import { HistoriaClinicaInvalidaError } from '../../../../odontogramas/application/errors/historia-clinica-invalida.error.js';
+import { ConsultaInvalidaError } from '../../../../odontogramas/application/errors/consulta-invalida.error.js';
+import { TransaccionNoSoportadaError } from '../../../../odontogramas/infrastructure/persistence/mongo/errors/transaccion-no-soportada.error.js';
+import { AutenticacionRequeridaError as AutenticacionRequeridaOdontogramasError } from '../../../../odontogramas/infrastructure/adapters/errors/autenticacion-requerida.error.js';
 
 export interface InvalidParam {
   name: string;
@@ -177,6 +189,84 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       title = 'Pieza dental FDI inválida';
       detail = exception.message;
       type = 'https://api.odontoclinic.local/errors/invalid-fdi-tooth';
+    } else if (exception instanceof OdontogramaNoEncontradoError) {
+      status = HttpStatus.NOT_FOUND;
+      title = 'Odontograma no encontrado';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/not-found';
+    } else if (exception instanceof RevisionInvalidaError) {
+      if (exception.message.toLowerCase().includes('no fue encontrada')) {
+        status = HttpStatus.NOT_FOUND;
+        title = 'Revisión no encontrada';
+        type = 'https://api.odontoclinic.local/errors/not-found';
+      } else {
+        status = HttpStatus.UNPROCESSABLE_ENTITY;
+        title = 'Revisión inválida';
+        type = 'https://api.odontoclinic.local/errors/invalid-revision';
+      }
+      detail = exception.message;
+    } else if (exception instanceof HistoriaClinicaInvalidaError) {
+      if (exception.message.toLowerCase().includes('no existe')) {
+        status = HttpStatus.NOT_FOUND;
+        title = 'Historia clínica no encontrada';
+        type = 'https://api.odontoclinic.local/errors/not-found';
+      } else {
+        status = HttpStatus.UNPROCESSABLE_ENTITY;
+        title = 'Historia clínica no activa';
+        type = 'https://api.odontoclinic.local/errors/chart-not-eligible';
+      }
+      detail = exception.message;
+    } else if (exception instanceof ConsultaInvalidaError) {
+      if (exception.message.toLowerCase().includes('no existe')) {
+        status = HttpStatus.NOT_FOUND;
+        title = 'Consulta odontológica no encontrada';
+        type = 'https://api.odontoclinic.local/errors/not-found';
+      } else {
+        status = HttpStatus.UNPROCESSABLE_ENTITY;
+        title = 'Incompatibilidad clínica con consulta';
+        type = 'https://api.odontoclinic.local/errors/invalid-consultation';
+      }
+      detail = exception.message;
+    } else if (exception instanceof OdontogramaDuplicadoError) {
+      status = HttpStatus.CONFLICT;
+      title = 'Odontograma duplicado';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/duplicate-record';
+    } else if (exception instanceof ConflictoConcurrenteOdontogramaError) {
+      status = HttpStatus.CONFLICT;
+      title = 'Conflicto de concurrencia optimista en odontograma';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/conflict';
+    } else if (exception instanceof PiezaDentalOdontogramaDuplicadaError) {
+      status = HttpStatus.CONFLICT;
+      title = 'Pieza dental duplicada en odontograma';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/conflict';
+    } else if (exception instanceof EstadoAnatomicoIncompatibleError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Condición anatómica incompatible';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/anatomical-incompatibility';
+    } else if (exception instanceof SuperficieIncisalIncompatibleError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Superficie incisal incompatible';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/incisal-surface-incompatibility';
+    } else if (exception instanceof EnmiendaCorrectivaInvalidaError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Enmienda correctiva inválida';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/invalid-amendment';
+    } else if (exception instanceof TransaccionNoSoportadaError) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      title = 'Servicio de persistencia clínica no disponible';
+      detail = 'El servicio de persistencia clínica no se encuentra disponible temporalmente para operaciones de escritura transaccional. Por favor intente más tarde.';
+      type = 'https://api.odontoclinic.local/errors/service-unavailable';
+    } else if (exception instanceof AutenticacionRequeridaOdontogramasError) {
+      status = HttpStatus.UNAUTHORIZED;
+      title = 'Autenticación requerida';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/unauthorized';
     } else if (exception instanceof HttpException) {
       // 2. Excepciones HTTP estándar de NestJS (ValidationPipe, etc.)
       status = exception.getStatus();

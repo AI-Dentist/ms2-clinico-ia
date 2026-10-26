@@ -34,6 +34,7 @@ import {
 } from './application/index.js';
 
 import { OdontogramasController } from './infrastructure/http/controllers/odontogramas.controller.js';
+import { OdontologoAuthGuard } from './infrastructure/http/guards/odontologo-auth.guard.js';
 
 const USE_CASES = [
   InicializarOdontogramaUseCase,
@@ -79,6 +80,7 @@ const USE_CASES = [
         return new MockOdontologoContextAdapter();
       },
     },
+    OdontologoAuthGuard,
     ...USE_CASES,
   ],
   exports: [
@@ -86,6 +88,7 @@ const USE_CASES = [
     HISTORIA_CLINICA_CONTEXT_PORT,
     CONSULTA_ODONTOLOGICA_CONTEXT_PORT,
     ODONTOLOGO_CONTEXT_PORT,
+    OdontologoAuthGuard,
     ...USE_CASES,
   ],
 })

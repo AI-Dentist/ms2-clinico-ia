@@ -7,6 +7,8 @@ import {
   Param,
   Post,
   Query,
+  UseFilters,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -15,6 +17,8 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { OdontologoAuthGuard } from '../guards/odontologo-auth.guard.js';
+import { ProblemDetailsFilter } from '../../../../historias-clinicas/infrastructure/http/filters/problem-details.filter.js';
 import { OperadorToken } from '../decorators/operador-token.decorator.js';
 import {
   InicializarOdontogramaHttpDto,
@@ -35,6 +39,8 @@ import {
 
 @ApiTags('Odontogramas')
 @ApiBearerAuth('bearer')
+@UseGuards(OdontologoAuthGuard)
+@UseFilters(ProblemDetailsFilter)
 @Controller('odontogramas')
 export class OdontogramasController {
   constructor(
@@ -63,7 +69,7 @@ export class OdontogramasController {
   @ApiResponse({ status: 422, description: 'Historia clínica inexistente o en estado no activo.' })
   async inicializar(
     @Body() dto: InicializarOdontogramaHttpDto,
-    @OperadorToken() token?: string,
+    @OperadorToken() token: string,
   ): Promise<OdontogramaActualDto> {
     return this.inicializarOdontogramaUseCase.ejecutar({
       historiaClinicaId: dto.historiaClinicaId,
@@ -191,7 +197,7 @@ export class OdontogramasController {
   async registrarRevision(
     @Param('id') id: string,
     @Body() dto: RegistrarRevisionOdontogramaHttpDto,
-    @OperadorToken() token?: string,
+    @OperadorToken() token: string,
   ): Promise<RevisionOdontogramaDto> {
     return this.registrarRevisionOdontogramaUseCase.ejecutar({
       odontogramaId: id,

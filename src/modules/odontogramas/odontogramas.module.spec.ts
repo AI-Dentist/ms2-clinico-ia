@@ -34,6 +34,7 @@ import {
   ObtenerSnapshotsPorConsultaUseCase,
 } from './application/index.js';
 import { OdontogramasController } from './infrastructure/http/controllers/odontogramas.controller.js';
+import { OdontologoAuthGuard } from './infrastructure/http/guards/odontologo-auth.guard.js';
 
 describe('OdontogramasModule (NestJS DI & Integration Unit Tests)', () => {
   const originalEnv = process.env.NODE_ENV;
@@ -197,8 +198,8 @@ describe('OdontogramasModule (NestJS DI & Integration Unit Tests)', () => {
     expect(mockModel.updateOne).not.toHaveBeenCalled();
   });
 
-  // 10. Registro y resolución de OdontogramasController
-  it('10. debe registrar y resolver OdontogramasController en OdontogramasModule', async () => {
+  // 10. Registro y resolución de OdontogramasController y OdontologoAuthGuard
+  it('10. debe registrar y resolver OdontogramasController y OdontologoAuthGuard en OdontogramasModule', async () => {
     const controllers = Reflect.getMetadata('controllers', OdontogramasModule) || [];
     expect(controllers).toContain(OdontogramasController);
     expect(controllers.length).toBe(1);
@@ -207,6 +208,10 @@ describe('OdontogramasModule (NestJS DI & Integration Unit Tests)', () => {
     const controller = moduleRef.get<OdontogramasController>(OdontogramasController);
     expect(controller).toBeDefined();
     expect(controller).toBeInstanceOf(OdontogramasController);
+
+    const guard = moduleRef.get<OdontologoAuthGuard>(OdontologoAuthGuard);
+    expect(guard).toBeDefined();
+    expect(guard).toBeInstanceOf(OdontologoAuthGuard);
   });
 
   // 11. Verificación de configuración segura de Mongoose (autoIndex y autoCreate desactivados)
