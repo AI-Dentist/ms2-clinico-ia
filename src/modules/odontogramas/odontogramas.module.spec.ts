@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Module, Global } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken, getConnectionToken } from '@nestjs/mongoose';
@@ -221,5 +223,59 @@ describe('OdontogramasModule (NestJS DI & Integration Unit Tests)', () => {
 
     expect(RevisionOdontogramaSchema.get('autoIndex')).toBe(false);
     expect(RevisionOdontogramaSchema.get('autoCreate')).toBe(false);
+  });
+
+  // 12. Verificación de configuración de arranque en desarrollo y negativa del adaptador en entornos no autorizados
+  describe('12. Política de arranque local y seguridad fail-closed del adaptador odontológico', () => {
+    it('debe configurar NODE_ENV=development explícitamente en start:dev y start:debug sin contaminar start:prod', () => {
+      const packageJsonPath = resolve(process.cwd(), 'package.json');
+      expect(existsSync(packageJsonPath)).toBe(true);
+
+      const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+      expect(pkg.scripts).toBeDefined();
+
+      // start:dev debe ejecutar el script multiplataforma de desarrollo
+      expect(pkg.scripts['start:dev']).toBe('node scripts/start-dev.js --watch');
+      expect(pkg.scripts['start:debug']).toBe('node scripts/start-dev.js --debug --watch');
+
+      // start:prod NO debe incluir desarrollo ni usar el runner sintético
+      expect(pkg.scripts['start:prod']).toBe('node dist/main');
+      expect(pkg.scripts['start:prod']).not.toContain('development');
+      expect(pkg.scripts['start:prod']).not.toContain('start-dev.js');
+
+      // El runner multiplataforma de desarrollo debe existir y contener la definición explícita de desarrollo
+      const runnerPath = resolve(process.cwd(), 'scripts/start-dev.js');
+      expect(existsSync(runnerPath)).toBe(true);
+      const runnerCode = readFileSync(runnerPath, 'utf8');
+      expect(runnerCode).toContain("process.env.NODE_ENV = 'development'");
+    });
+
+    it('debe negar taxativamente el uso de MockOdontologoContextAdapter en producción, staging o entorno no configurado', async () => {
+      const entornosNoAutorizados = ['production', 'staging', 'qa', '', undefined];
+
+      for (const env of entornosNoAutorizados) {
+        if (env === undefined) {
+          delete process.env.NODE_ENV;
+        } else {
+          process.env.NODE_ENV = env;
+        }
+
+        await expect(crearModuloPrueba()).rejects.toThrow(
+          /CRÍTICO: MockOdontologoContextAdapter deshabilitado por política de seguridad/
+        );
+      }
+    });
+
+    it('debe permitir la inicialización única y exclusivamente en entornos development y test', async () => {
+      // Test
+      process.env.NODE_ENV = 'test';
+      const moduleTest = await crearModuloPrueba();
+      expect(moduleTest.get(ODONTOLOGO_CONTEXT_PORT)).toBeInstanceOf(MockOdontologoContextAdapter);
+
+      // Development
+      process.env.NODE_ENV = 'development';
+      const moduleDev = await crearModuloPrueba();
+      expect(moduleDev.get(ODONTOLOGO_CONTEXT_PORT)).toBeInstanceOf(MockOdontologoContextAdapter);
+    });
   });
 });
