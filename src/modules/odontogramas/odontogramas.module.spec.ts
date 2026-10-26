@@ -33,6 +33,7 @@ import {
   ObtenerSnapshotRevisionUseCase,
   ObtenerSnapshotsPorConsultaUseCase,
 } from './application/index.js';
+import { OdontogramasController } from './infrastructure/http/controllers/odontogramas.controller.js';
 
 describe('OdontogramasModule (NestJS DI & Integration Unit Tests)', () => {
   const originalEnv = process.env.NODE_ENV;
@@ -196,11 +197,16 @@ describe('OdontogramasModule (NestJS DI & Integration Unit Tests)', () => {
     expect(mockModel.updateOne).not.toHaveBeenCalled();
   });
 
-  // 10. Ausencia de controladores HTTP nuevos
-  it('10. no debe registrar controladores HTTP en OdontogramasModule', () => {
+  // 10. Registro y resolución de OdontogramasController
+  it('10. debe registrar y resolver OdontogramasController en OdontogramasModule', async () => {
     const controllers = Reflect.getMetadata('controllers', OdontogramasModule) || [];
-    expect(controllers).toEqual([]);
-    expect(controllers.length).toBe(0);
+    expect(controllers).toContain(OdontogramasController);
+    expect(controllers.length).toBe(1);
+
+    const moduleRef = await crearModuloPrueba();
+    const controller = moduleRef.get<OdontogramasController>(OdontogramasController);
+    expect(controller).toBeDefined();
+    expect(controller).toBeInstanceOf(OdontogramasController);
   });
 
   // 11. Verificación de configuración segura de Mongoose (autoIndex y autoCreate desactivados)

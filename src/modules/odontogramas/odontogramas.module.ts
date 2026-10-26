@@ -33,6 +33,8 @@ import {
   ObtenerSnapshotsPorConsultaUseCase,
 } from './application/index.js';
 
+import { OdontogramasController } from './infrastructure/http/controllers/odontogramas.controller.js';
+
 const USE_CASES = [
   InicializarOdontogramaUseCase,
   ObtenerOdontogramaActualUseCase,
@@ -51,7 +53,7 @@ const USE_CASES = [
     HistoriasClinicasModule,
     ConsultasOdontologicasModule,
   ],
-  controllers: [],
+  controllers: [OdontogramasController],
   providers: [
     {
       provide: ODONTOGRAMA_REPOSITORY,

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
-import { Model, Connection, ClientSession } from 'mongoose';
+import { Model } from 'mongoose';
+import type { Connection, ClientSession } from 'mongoose';
 import type {
   IOdontogramaRepositoryPort,
   ListadoRevisionesResultado,
