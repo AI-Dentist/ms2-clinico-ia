@@ -10,7 +10,17 @@ import type { Connection } from 'mongoose';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const uri = configService.getOrThrow<string>('MONGODB_URI');
+        const uri =
+          process.env.NODE_ENV === 'test' && process.env.MONGODB_URI
+            ? process.env.MONGODB_URI
+            : configService.getOrThrow<string>('MONGODB_URI');
+
+        if (process.env.NODE_ENV === 'test' && (uri.includes('27017') || !uri.includes('27018'))) {
+          throw new Error(
+            'CRÍTICO: Violación de seguridad clínica. En entorno de test la conexión DEBE ser exclusivamente en puerto 27018.',
+          );
+        }
+
         const logger = new Logger('MongoDB');
 
         return {

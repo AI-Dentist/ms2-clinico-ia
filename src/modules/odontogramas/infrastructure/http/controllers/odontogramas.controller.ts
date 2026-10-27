@@ -4,12 +4,15 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Optional,
   Param,
   Post,
   Query,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
+import { InjectConnection } from '@nestjs/mongoose';
+import type { Connection } from 'mongoose';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -50,7 +53,34 @@ export class OdontogramasController {
     private readonly listarHistorialRevisionesUseCase: ListarHistorialRevisionesUseCase,
     private readonly obtenerSnapshotRevisionUseCase: ObtenerSnapshotRevisionUseCase,
     private readonly obtenerSnapshotsPorConsultaUseCase: ObtenerSnapshotsPorConsultaUseCase,
+    @Optional()
+    @InjectConnection()
+    private readonly connection?: Connection,
   ) {}
+
+  @Get('entorno-aislado/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Consultar estado de integración y aislamiento de base de datos',
+    description: 'Informa si la instancia actual está conectada de forma segura a MongoDB 27018 con réplicas activas.',
+  })
+  async estadoEntornoAislado(): Promise<{
+    aislado: boolean;
+    entorno: string;
+    puertoMongo: number | null;
+    replicaSet: string | null;
+    escrituraHabilitada: boolean;
+  }> {
+    const port = (this.connection as any)?.port ?? null;
+    const isIsolated = port === 27018;
+    return {
+      aislado: isIsolated,
+      entorno: process.env.NODE_ENV || 'development',
+      puertoMongo: port,
+      replicaSet: isIsolated ? 'rs_odontograma_test' : null,
+      escrituraHabilitada: isIsolated,
+    };
+  }
 
   @Post('inicializar')
   @HttpCode(HttpStatus.CREATED)

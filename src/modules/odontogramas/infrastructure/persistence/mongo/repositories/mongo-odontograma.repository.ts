@@ -207,6 +207,14 @@ export class MongoOdontogramaRepository implements IOdontogramaRepositoryPort {
    * Lanza TransaccionNoSoportadaError antes de ejecutar cualquier mutación en Standalone.
    */
   async validarCapacidadTransaccional(): Promise<void> {
+    // Salvaguarda clínica inmutable: Prohibida cualquier escritura en la instancia principal (puerto 27017)
+    const connPort = (this.connection as any)?.port;
+    if (connPort === 27017) {
+      throw new Error(
+        'CRÍTICO: Violación de seguridad clínica. Prohibida cualquier escritura o inicialización de transacciones en la base de datos principal (puerto 27017).'
+      );
+    }
+
     const client = this.connection?.getClient() as any;
     const topology = client?.topology;
     const topologyType = topology?.description?.type;

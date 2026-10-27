@@ -14,6 +14,7 @@
     "start:dev": "node scripts/start-dev.js --watch",
     "start:debug": "node scripts/start-dev.js --debug --watch",
     "start:prod": "node dist/main",
+    "start:isolated": "node dist/isolated-test-server.js",
     "lint": "oxlint --type-aware src/ test/",
     "test": "vitest run",
     "test:watch": "vitest",
