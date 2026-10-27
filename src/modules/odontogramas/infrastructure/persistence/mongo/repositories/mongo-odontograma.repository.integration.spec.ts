@@ -152,12 +152,22 @@ describe('MongoOdontogramaRepository (Real Integration Tests on Isolated Replica
       expect(oDoc?.version).toBe(1);
       expect(oDoc?.totalRevisiones).toBe(1);
       expect(oDoc?.revisionActualId).toBe(revisionBasal.id.valor);
+      // Verificar que las 52 posiciones se inicialicen en DESCONOCIDO y NO_EVALUADO (nunca SANA)
       expect(oDoc?.piezas.length).toBe(52);
-
-      // Verificar que las 52 posiciones se inicialicen en DESCONOCIDO y NO_EVALUADO
-      const primerDiente = oDoc?.piezas[0];
-      expect(primerDiente?.estadoAnatomico).toBe(EstadoAnatomicoPieza.DESCONOCIDO);
-      expect(primerDiente?.estadoEvaluacion).toBe(EstadoEvaluacionPieza.NO_EVALUADO);
+      for (const p of oDoc!.piezas) {
+        expect(p.estadoAnatomico).toBe(EstadoAnatomicoPieza.DESCONOCIDO);
+        expect(p.estadoEvaluacion).toBe(EstadoEvaluacionPieza.NO_EVALUADO);
+        expect(p.tratamientosEstructurales.length).toBe(0);
+        expect(p.observaciones).toBeNull();
+        // Verificar que ninguna superficie esté como SANA
+        const superficiesList = Object.values(p.superficies);
+        expect(superficiesList.length).toBe(5);
+        for (const s of superficiesList) {
+          expect(s.condicion).toBe(CondicionSuperficie.NO_EVALUADA);
+          expect(s.evaluada).toBe(false);
+          expect(s.condicion).not.toBe('sana');
+        }
+      }
 
       // Verificar revisión basal
       expect(rDoc?.numeroRevision).toBe(1);
@@ -485,6 +495,107 @@ describe('MongoOdontogramaRepository (Real Integration Tests on Isolated Replica
       expect(pieza31.estadoAnatomico).toBe(EstadoAnatomicoPieza.PRESENTE);
       expect(pieza31.tratamientosEstructurales.length).toBe(1);
       expect(pieza31.tratamientosEstructurales[0].tipo).toBe(TipoTratamientoEstructural.CORONA);
+    });
+  });
+
+  // ─── G. INMUTABILIDAD ESTRICTA DE SNAPSHOTS HISTÓRICOS ──────────────────────
+
+  describe('G. Inmutabilidad Estricta de Snapshots Históricos', () => {
+    it('los snapshots anteriores deben permanecer inmutables tras revisiones posteriores (Escenario 8)', async () => {
+      const odontograma = await repository.buscarPorHistoriaClinicaId(historiaId);
+      expect(odontograma).not.toBeNull();
+      if (!odontograma) return;
+
+      // Recuperar la revisión 1 (basal) directamente de MongoDB
+      const rev1Doc = await revisionModel.findOne({
+        odontogramaId: odontograma.id.valor,
+        numeroRevision: 1,
+      }).lean().exec();
+
+      expect(rev1Doc).toBeDefined();
+      expect(rev1Doc?.snapshotPiezas.length).toBe(52);
+
+      // En la revisión 1, la pieza 16 y la pieza 31 DEBEN conservar su estado original DESCONOCIDO
+      // a pesar de que en revisiones posteriores fueron marcadas como PRESENTE con CARIES / CORONA
+      const p16EnRev1 = rev1Doc?.snapshotPiezas.find((p) => p.numeroFDI === 16);
+      expect(p16EnRev1?.estadoAnatomico).toBe(EstadoAnatomicoPieza.DESCONOCIDO);
+      expect(p16EnRev1?.estadoEvaluacion).toBe(EstadoEvaluacionPieza.NO_EVALUADO);
+
+      const p31EnRev1 = rev1Doc?.snapshotPiezas.find((p) => p.numeroFDI === 31);
+      expect(p31EnRev1?.estadoAnatomico).toBe(EstadoAnatomicoPieza.DESCONOCIDO);
+      expect(p31EnRev1?.tratamientosEstructurales.length).toBe(0);
+
+      // En el estado consolidado actual (versión 6), esas piezas sí tienen sus cambios
+      const pieza16Actual = odontograma.obtenerPieza(16);
+      expect(pieza16Actual.estadoAnatomico).toBe(EstadoAnatomicoPieza.PRESENTE);
+    });
+  });
+
+  // ─── H. AISLAMIENTO MULTI-HISTORIA ──────────────────────────────────────────
+
+  describe('H. Aislamiento Transaccional Entre Múltiples Historias Clínicas', () => {
+    it('las revisiones de una historia clínica A no deben afectar ni mezclarse con una historia clínica B (Escenario 13)', async () => {
+      const historiaB = HistoriaClinicaId.reconstituir('hc_historia_aislada_bbbb_1234');
+      const pacienteB = PacienteId.crear('pac_paciente_aislado_bbbb');
+
+      const { odontograma: oB, revisionBasal: rB } = Odontograma.inicializar({
+        historiaClinicaId: historiaB,
+        pacienteId: pacienteB,
+        odontologoId,
+        ahora: fechaFija,
+      });
+
+      await repository.guardarInicial(oB, rB);
+
+      // Registrar una revisión en historia B
+      const revB2 = oB.aplicarRevision({
+        tipoRevision: TipoRevisionOdontograma.NUEVA_OBSERVACION,
+        aplicaAlEstadoActual: true,
+        odontologoId,
+        fechaObservacionClinica: fechaFija,
+        motivoRevision: 'Observación exclusiva de historia B',
+        versionEsperada: 1,
+        deltas: [{ numeroFDI: 44, estadoAnatomicoNuevo: EstadoAnatomicoPieza.PRESENTE }],
+      });
+      await repository.aplicarRevisionTransaccional(oB, revB2, 1);
+
+      // 1. Historia A conserva sus 6 revisiones intactas
+      const revsA = await repository.listarRevisiones((await repository.buscarPorHistoriaClinicaId(historiaId))!.id, 20, 0);
+      expect(revsA.total).toBe(6);
+      for (const r of revsA.revisiones) {
+        expect(r.historiaClinicaId.valor).toBe(historiaId.valor);
+        expect(r.historiaClinicaId.valor).not.toBe(historiaB.valor);
+      }
+
+      // 2. Historia B tiene exactamente 2 revisiones propias
+      const revsB = await repository.listarRevisiones(oB.id, 20, 0);
+      expect(revsB.total).toBe(2);
+      for (const r of revsB.revisiones) {
+        expect(r.historiaClinicaId.valor).toBe(historiaB.valor);
+        expect(r.historiaClinicaId.valor).not.toBe(historiaId.valor);
+      }
+    });
+  });
+
+  // ─── I. INTEGRIDAD CRUZADA DE COLECCIONES ───────────────────────────────────
+
+  describe('I. Integridad Cruzada de las Colecciones Transaccionales', () => {
+    it('debe mantener consistencia matemática y de llaves entre odontogramas y revisiones (Escenario 14)', async () => {
+      const oDocA = await odontogramaModel.findOne({ historiaClinicaId: historiaId.valor }).lean().exec();
+      expect(oDocA).toBeDefined();
+
+      const totalRevsColeccion = await revisionModel.countDocuments({ odontogramaId: oDocA?._id });
+      expect(totalRevsColeccion).toBe(oDocA?.totalRevisiones);
+      expect(oDocA?.revisionActualId).toBeDefined();
+
+      // La revisión actual debe existir y ser la de mayor número
+      const revActualDoc = await revisionModel.findById(oDocA?.revisionActualId).lean().exec();
+      expect(revActualDoc).toBeDefined();
+      expect(revActualDoc?.numeroRevision).toBe(oDocA?.totalRevisiones);
+
+      // Verificación de salvaguarda de puerto: asegurar que connection apunta a 27018
+      expect(connection.port).toBe(27018);
+      expect(connection.db?.databaseName).toMatch(/^test-odontogramas-int-/);
     });
   });
 });
