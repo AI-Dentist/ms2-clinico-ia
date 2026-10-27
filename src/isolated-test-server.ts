@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
 import type { Connection } from 'mongoose';
-import { AppModule } from './app.module.js';
 import { ProblemDetailsFilter } from './modules/historias-clinicas/infrastructure/http/filters/problem-details.filter.js';
 
 // 1. Forzar entorno de test e inmutabilidad de configuración
@@ -12,7 +11,8 @@ const TARGET_PORT = Number(process.env.PORT_ISOLATED || 3002);
 const FORBIDDEN_PORT = 27017;
 const REQUIRED_MONGO_PORT = 27018;
 
-const DEFAULT_ISOLATED_URI = 'mongodb://127.0.0.1:27018/test_odontograma_db?replicaSet=rs_odontograma_test';
+const DEFAULT_DB = process.env.ISOLATED_DB_NAME || 'test-estudios-int-d8f41e9c';
+const DEFAULT_ISOLATED_URI = `mongodb://127.0.0.1:27018/${DEFAULT_DB}?replicaSet=rs_odontograma_test`;
 const mongoUri = process.env.ISOLATED_MONGODB_URI || DEFAULT_ISOLATED_URI;
 
 // 2. Salvaguardas defensivas de seguridad clínica antes de iniciar NestJS
@@ -34,6 +34,8 @@ async function bootstrapIsolated() {
   const logger = new Logger('IsolatedTestServer');
   logger.log(`Iniciando servidor NestJS aislado en puerto ${TARGET_PORT}...`);
   logger.log(`Conexión a MongoDB temporal en: ${mongoUri}`);
+
+  const { AppModule } = await import('./app.module.js');
 
   const app = await NestFactory.create(AppModule, {
     logger: ['log', 'warn', 'error', 'debug'],

@@ -7,6 +7,7 @@ import { DatabaseModule } from './infrastructure/database/database.module.js';
 import { HistoriasClinicasModule } from './modules/historias-clinicas/historias-clinicas.module.js';
 import { ConsultasOdontologicasModule } from './modules/consultas-odontologicas/consultas-odontologicas.module.js';
 import { OdontogramasModule } from './modules/odontogramas/odontogramas.module.js';
+import { EstudiosModule } from './modules/estudios/estudios.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { OdontogramasModule } from './modules/odontogramas/odontogramas.module.j
     HistoriasClinicasModule,
     ConsultasOdontologicasModule,
     OdontogramasModule,
+    EstudiosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

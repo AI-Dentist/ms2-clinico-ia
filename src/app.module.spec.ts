@@ -1,18 +1,30 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
-import { AppModule } from './app.module.js';
 import { OdontogramasModule } from './modules/odontogramas/odontogramas.module.js';
 import { ODONTOGRAMA_REPOSITORY } from './modules/odontogramas/domain/ports/odontograma.repository.port.js';
 import { OdontogramaDocument } from './modules/odontogramas/infrastructure/persistence/mongo/schemas/odontograma.schema.js';
 import { RevisionOdontogramaDocument } from './modules/odontogramas/infrastructure/persistence/mongo/schemas/revision-odontograma.schema.js';
 import { HistoriaClinicaDocument } from './modules/historias-clinicas/infrastructure/persistence/mongo/schemas/historia-clinica.schema.js';
 import { ConsultaOdontologicaDocument } from './modules/consultas-odontologicas/infrastructure/persistence/mongo/schemas/consulta-odontologica.schema.js';
+import { LaboratorioMongo } from './modules/estudios/infrastructure/persistence/mongo/schemas/laboratorio.schema.js';
+import { TipoEstudioMongo } from './modules/estudios/infrastructure/persistence/mongo/schemas/tipo-estudio.schema.js';
+import { SolicitudEstudioMongo } from './modules/estudios/infrastructure/persistence/mongo/schemas/solicitud-estudio.schema.js';
 
 describe('AppModule Integration (with mocked DB)', () => {
-  it('debe compilar AppModule y resolver OdontogramasModule y sus dependencias sin conectarse a la base real', async () => {
-    process.env.NODE_ENV = 'test';
+  let AppModuleClass: any;
+  let EstudiosModuleClass: any;
 
+  beforeAll(async () => {
+    process.env.NODE_ENV = 'test';
+    process.env.MONGODB_URI = 'mongodb://127.0.0.1:27018/test_odontograma_db?replicaSet=rs_odontograma_test';
+    const appMod = await import('./app.module.js');
+    AppModuleClass = appMod.AppModule;
+    const estMod = await import('./modules/estudios/estudios.module.js');
+    EstudiosModuleClass = estMod.EstudiosModule;
+  });
+
+  it('debe compilar AppModule y resolver OdontogramasModule y EstudiosModule sin conectarse a la base real', async () => {
     const mockConnection = {
       close: async () => {},
       startSession: () => ({
@@ -24,15 +36,15 @@ describe('AppModule Integration (with mocked DB)', () => {
 
     const mockModel = {
       create: () => {},
-      find: () => ({ sort: () => ({ skip: () => ({ limit: () => ({ exec: async () => [] }) }) }) }),
-      findById: () => ({ exec: async () => null }),
-      findOne: () => ({ exec: async () => null }),
+      find: () => ({ sort: () => ({ skip: () => ({ limit: () => ({ lean: () => ({ exec: async () => [] }) }) }) }) }),
+      findById: () => ({ lean: () => ({ exec: async () => null }), exec: async () => null }),
+      findOne: () => ({ lean: () => ({ exec: async () => null }), exec: async () => null }),
       countDocuments: () => ({ exec: async () => 0 }),
       updateOne: () => ({ exec: async () => ({ matchedCount: 1 }) }),
     };
 
     const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
+      imports: [AppModuleClass],
     })
       .overrideProvider(getConnectionToken())
       .useValue(mockConnection)
@@ -44,12 +56,21 @@ describe('AppModule Integration (with mocked DB)', () => {
       .useValue(mockModel)
       .overrideProvider(getModelToken(ConsultaOdontologicaDocument.name))
       .useValue(mockModel)
+      .overrideProvider(getModelToken(LaboratorioMongo.name))
+      .useValue(mockModel)
+      .overrideProvider(getModelToken(TipoEstudioMongo.name))
+      .useValue(mockModel)
+      .overrideProvider(getModelToken(SolicitudEstudioMongo.name))
+      .useValue(mockModel)
       .compile();
 
     expect(moduleRef).toBeDefined();
 
     const odontogramasModule = moduleRef.get<OdontogramasModule>(OdontogramasModule);
     expect(odontogramasModule).toBeDefined();
+
+    const estudiosModule = moduleRef.get(EstudiosModuleClass);
+    expect(estudiosModule).toBeDefined();
 
     const repo = moduleRef.get(ODONTOGRAMA_REPOSITORY);
     expect(repo).toBeDefined();

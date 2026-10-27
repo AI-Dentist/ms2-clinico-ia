@@ -1,0 +1,6 @@
+export enum EstadoSolicitudEstudio {
+  SOLICITADO = 'SOLICITADO',
+  EN_PROCESO = 'EN_PROCESO',
+  COMPLETADO = 'COMPLETADO',
+  CANCELADO = 'CANCELADO',
+}
