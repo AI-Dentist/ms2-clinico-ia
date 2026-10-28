@@ -9,6 +9,12 @@ import { TransicionEstadoInvalidaError } from '../../../domain/errors/transicion
 import { AlergiaDuplicadaError } from '../../../domain/errors/alergia-duplicada.error.js';
 import { PacienteInexistenteError } from '../../../application/errors/paciente-inexistente.error.js';
 import { AutenticacionRequeridaError } from '../../../application/errors/autenticacion-requerida.error.js';
+import {
+  PacienteNoDisponibleError,
+  AutenticacionMs1Error,
+  Ms1GraphqlError,
+  IdPacienteInvalidoError,
+} from '../../adapters/errors/index.js';
 import { EstadoHistoria } from '../../../domain/value-objects/estado-historia.enum.js';
 
 describe('ProblemDetailsFilter', () => {
@@ -147,6 +153,63 @@ describe('ProblemDetailsFilter', () => {
       expect.objectContaining({
         status: 422,
         title: 'Alergia duplicada',
+      }),
+    );
+  });
+
+  it('debe mapear PacienteNoDisponibleError a HTTP 503 Service Unavailable', () => {
+    const error = new PacienteNoDisponibleError('Timeout al conectar con MS1');
+    filter.catch(error, mockHost);
+
+    expect(mockStatus).toHaveBeenCalledWith(HttpStatus.SERVICE_UNAVAILABLE);
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 503,
+        title: 'Servicio de catálogo de pacientes no disponible',
+        detail: 'Timeout al conectar con MS1',
+        type: 'https://api.odontoclinic.local/errors/service-unavailable',
+      }),
+    );
+  });
+
+  it('debe mapear AutenticacionMs1Error a HTTP 502 Bad Gateway', () => {
+    const error = new AutenticacionMs1Error(401, 'Token rechazado por MS1');
+    filter.catch(error, mockHost);
+
+    expect(mockStatus).toHaveBeenCalledWith(HttpStatus.BAD_GATEWAY);
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 502,
+        title: 'Error de autenticación con catálogo externo',
+        type: 'https://api.odontoclinic.local/errors/upstream-auth-error',
+      }),
+    );
+  });
+
+  it('debe mapear Ms1GraphqlError a HTTP 502 Bad Gateway', () => {
+    const error = new Ms1GraphqlError([{ message: 'Error de esquema' }]);
+    filter.catch(error, mockHost);
+
+    expect(mockStatus).toHaveBeenCalledWith(HttpStatus.BAD_GATEWAY);
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 502,
+        title: 'Error en catálogo de pacientes externo',
+        type: 'https://api.odontoclinic.local/errors/upstream-graphql-error',
+      }),
+    );
+  });
+
+  it('debe mapear IdPacienteInvalidoError a HTTP 422 Unprocessable Entity', () => {
+    const error = new IdPacienteInvalidoError('id-no-uuid');
+    filter.catch(error, mockHost);
+
+    expect(mockStatus).toHaveBeenCalledWith(HttpStatus.UNPROCESSABLE_ENTITY);
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 422,
+        title: 'Identificador de paciente inválido',
+        type: 'https://api.odontoclinic.local/errors/invalid-patient-id',
       }),
     );
   });

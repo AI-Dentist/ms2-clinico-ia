@@ -15,6 +15,12 @@ import { TransicionEstadoInvalidaError } from '../../../domain/errors/transicion
 import { AlergiaDuplicadaError } from '../../../domain/errors/alergia-duplicada.error.js';
 import { PacienteInexistenteError } from '../../../application/errors/paciente-inexistente.error.js';
 import { AutenticacionRequeridaError } from '../../../application/errors/autenticacion-requerida.error.js';
+import {
+  PacienteNoDisponibleError,
+  AutenticacionMs1Error,
+  Ms1GraphqlError,
+  IdPacienteInvalidoError,
+} from '../../adapters/errors/index.js';
 import { ConsultaNoEncontradaError } from '../../../../consultas-odontologicas/domain/errors/consulta-no-encontrada.error.js';
 import { ConflictoConcurrenteConsultaError } from '../../../../consultas-odontologicas/domain/errors/conflicto-concurrente-consulta.error.js';
 import { CitaInvalidaParaConsultaError } from '../../../../consultas-odontologicas/domain/errors/cita-invalida-para-consulta.error.js';
@@ -97,6 +103,26 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       title = 'Paciente no válido o inexistente';
       detail = exception.message;
       type = 'https://api.odontoclinic.local/errors/patient-not-found';
+    } else if (exception instanceof IdPacienteInvalidoError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Identificador de paciente inválido';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/invalid-patient-id';
+    } else if (exception instanceof PacienteNoDisponibleError) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      title = 'Servicio de catálogo de pacientes no disponible';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/service-unavailable';
+    } else if (exception instanceof AutenticacionMs1Error) {
+      status = HttpStatus.BAD_GATEWAY;
+      title = 'Error de autenticación con catálogo externo';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/upstream-auth-error';
+    } else if (exception instanceof Ms1GraphqlError) {
+      status = HttpStatus.BAD_GATEWAY;
+      title = 'Error en catálogo de pacientes externo';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/upstream-graphql-error';
     } else if (exception instanceof HistoriaClinicaNoEditableError) {
       status = HttpStatus.UNPROCESSABLE_ENTITY;
       title = 'Expediente no editable';

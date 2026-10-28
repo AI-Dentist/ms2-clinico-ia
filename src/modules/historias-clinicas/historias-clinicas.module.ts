@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import {
   HistoriaClinicaDocument,
@@ -6,6 +7,9 @@ import {
 } from './infrastructure/persistence/mongo/schemas/historia-clinica.schema.js';
 import { MongoHistoriaClinicaRepository } from './infrastructure/persistence/mongo/repositories/mongo-historia-clinica.repository.js';
 import { MockPacienteValidatorAdapter } from './infrastructure/adapters/mock-paciente-validator.adapter.js';
+import { GraphqlMs1PacienteValidatorAdapter } from './infrastructure/adapters/graphql-ms1-paciente-validator.adapter.js';
+import { MS1_CREDENTIALS_PROVIDER } from './infrastructure/adapters/ms1-credentials-provider.port.js';
+import { EnvMs1CredentialsProvider } from './infrastructure/adapters/env-ms1-credentials-provider.adapter.js';
 import { MockOdontologoContextAdapter } from './infrastructure/adapters/mock-odontologo-context.adapter.js';
 import { HISTORIA_CLINICA_REPOSITORY } from './domain/ports/historia-clinica.repository.port.js';
 import { PACIENTE_VALIDATOR_PORT } from './domain/ports/paciente-validator.port.js';
@@ -39,6 +43,7 @@ const USE_CASES = [
 
 @Module({
   imports: [
+    ConfigModule,
     MongooseModule.forFeature([
       { name: HistoriaClinicaDocument.name, schema: HistoriaClinicaSchema },
     ]),
@@ -50,9 +55,35 @@ const USE_CASES = [
       provide: HISTORIA_CLINICA_REPOSITORY,
       useClass: MongoHistoriaClinicaRepository,
     },
+    EnvMs1CredentialsProvider,
+    {
+      provide: MS1_CREDENTIALS_PROVIDER,
+      useClass: EnvMs1CredentialsProvider,
+    },
+    MockPacienteValidatorAdapter,
+    GraphqlMs1PacienteValidatorAdapter,
     {
       provide: PACIENTE_VALIDATOR_PORT,
-      useClass: MockPacienteValidatorAdapter,
+      useFactory: (
+        graphqlAdapter: GraphqlMs1PacienteValidatorAdapter,
+        mockAdapter: MockPacienteValidatorAdapter,
+        configService?: ConfigService,
+      ) => {
+        const adapterMode =
+          configService?.get<string>('PACIENTE_VALIDATOR_ADAPTER') ??
+          process.env.PACIENTE_VALIDATOR_ADAPTER ??
+          'mock';
+
+        if (adapterMode === 'graphql') {
+          return graphqlAdapter;
+        }
+        return mockAdapter;
+      },
+      inject: [
+        GraphqlMs1PacienteValidatorAdapter,
+        MockPacienteValidatorAdapter,
+        { token: ConfigService, optional: true },
+      ],
     },
     {
       provide: ODONTOLOGO_CONTEXT_PORT,
@@ -60,6 +91,14 @@ const USE_CASES = [
     },
     ...USE_CASES,
   ],
-  exports: [HISTORIA_CLINICA_REPOSITORY, OdontologoAuthGuard, ...USE_CASES],
+  exports: [
+    HISTORIA_CLINICA_REPOSITORY,
+    PACIENTE_VALIDATOR_PORT,
+    MS1_CREDENTIALS_PROVIDER,
+    GraphqlMs1PacienteValidatorAdapter,
+    MockPacienteValidatorAdapter,
+    OdontologoAuthGuard,
+    ...USE_CASES,
+  ],
 })
 export class HistoriasClinicasModule {}

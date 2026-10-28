@@ -6,6 +6,8 @@ import type { IOdontologoContextPort } from '../../domain/ports/odontologo-conte
 import { HistoriaClinicaDuplicadaError } from '../../domain/errors/historia-clinica-duplicada.error.js';
 import { PacienteInexistenteError } from '../errors/paciente-inexistente.error.js';
 import { AutenticacionRequeridaError } from '../errors/autenticacion-requerida.error.js';
+import { PacienteNoDisponibleError } from '../../infrastructure/adapters/errors/paciente-no-disponible.error.js';
+import { AutenticacionMs1Error } from '../../infrastructure/adapters/errors/autenticacion-ms1.error.js';
 import { EstadoHistoria } from '../../domain/value-objects/estado-historia.enum.js';
 import { AccionAuditoria } from '../../domain/value-objects/accion-auditoria.enum.js';
 
@@ -147,6 +149,36 @@ describe('CrearHistoriaClinicaUseCase', () => {
     expect(mockRepository.guardar).not.toHaveBeenCalled();
   });
 
+  it('debe propagar PacienteNoDisponibleError sin crear historia si MS1 falla o sufre timeout', async () => {
+    mockPacienteValidator.existePaciente.mockRejectedValue(
+      new PacienteNoDisponibleError('Timeout tras 2000ms consultando MS1'),
+    );
+
+    await expect(
+      useCase.execute({
+        tokenAutenticacion: 'token_valido_123',
+        pacienteId: '33333333-3333-4333-8333-333333333333',
+      }),
+    ).rejects.toThrow(PacienteNoDisponibleError);
+
+    expect(mockRepository.guardar).not.toHaveBeenCalled();
+  });
+
+  it('debe propagar AutenticacionMs1Error si las credenciales de servicio con MS1 son inválidas', async () => {
+    mockPacienteValidator.existePaciente.mockRejectedValue(
+      new AutenticacionMs1Error(401, 'Token inválido'),
+    );
+
+    await expect(
+      useCase.execute({
+        tokenAutenticacion: 'token_valido_123',
+        pacienteId: '33333333-3333-4333-8333-333333333333',
+      }),
+    ).rejects.toThrow(AutenticacionMs1Error);
+
+    expect(mockRepository.guardar).not.toHaveBeenCalled();
+  });
+
   it('debe lanzar HistoriaClinicaDuplicadaError si ya existe un expediente para ese paciente (INV-01)', async () => {
     mockRepository.existePorPacienteId.mockResolvedValue(true);
 
@@ -158,5 +190,19 @@ describe('CrearHistoriaClinicaUseCase', () => {
     ).rejects.toThrow(HistoriaClinicaDuplicadaError);
 
     expect(mockRepository.guardar).not.toHaveBeenCalled();
+  });
+
+  it('debe admitir un UUID estándar de MS1 para PacienteId y crear la historia exitosamente', async () => {
+    const ms1Uuid = '33333333-3333-4333-8333-333333333333';
+    mockPacienteValidator.existePaciente.mockResolvedValue(true);
+
+    const result = await useCase.execute({
+      tokenAutenticacion: 'token_valido_123',
+      pacienteId: ms1Uuid,
+    });
+
+    expect(mockPacienteValidator.existePaciente).toHaveBeenCalledWith(ms1Uuid);
+    expect(result.pacienteId).toBe(ms1Uuid);
+    expect(mockRepository.guardar).toHaveBeenCalledTimes(1);
   });
 });
