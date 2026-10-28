@@ -9,6 +9,7 @@ import { AnamnesisActual } from '../value-objects/anamnesis-actual.vo.js';
 import { ExploracionFisica } from '../value-objects/exploracion-fisica.vo.js';
 import { DiagnosticoItem } from '../value-objects/diagnostico-item.vo.js';
 import { ProcedimientoRealizado } from '../value-objects/procedimiento-realizado.vo.js';
+import { ServicioFacturableConsulta } from '../value-objects/servicio-facturable-consulta.vo.js';
 import { EvolucionSOAP } from '../value-objects/evolucion-soap.vo.js';
 import { SnapshotRiesgoClinico } from '../value-objects/snapshot-riesgo-clinico.vo.js';
 import { ConsultaNoEditableError } from '../errors/consulta-no-editable.error.js';
@@ -32,6 +33,8 @@ export interface AbrirConsultaProps {
   exploracionFisica?: ExploracionFisica;
   diagnosticos?: DiagnosticoItem[];
   procedimientosRealizados?: ProcedimientoRealizado[];
+  serviciosFacturables?: ServicioFacturableConsulta[];
+  observacionesCobro?: string | null;
   evolucionSOAP?: EvolucionSOAP;
   recomendaciones?: string | null;
 }
@@ -52,6 +55,8 @@ export interface ReconstituirConsultaProps {
   exploracionFisica: ExploracionFisica;
   diagnosticos: DiagnosticoItem[];
   procedimientosRealizados: ProcedimientoRealizado[];
+  serviciosFacturables?: ServicioFacturableConsulta[];
+  observacionesCobro?: string | null;
   evolucionSOAP: EvolucionSOAP;
   recomendaciones: string | null;
   motivoCancelacion: string | null;
@@ -60,6 +65,12 @@ export interface ReconstituirConsultaProps {
   actualizadoEn: Date;
   creadoPor: OdontologoId;
   actualizadoPor: OdontologoId;
+}
+
+export interface OpcionesCompletarConsulta {
+  serviciosFacturables?: ServicioFacturableConsulta[];
+  observacionesCobro?: string | null;
+  ahora?: Date;
 }
 
 export interface ActualizarAtencionProps {
@@ -97,6 +108,8 @@ export class ConsultaOdontologica {
   private _exploracionFisica: ExploracionFisica;
   private _diagnosticos: DiagnosticoItem[];
   private _procedimientosRealizados: ProcedimientoRealizado[];
+  private _serviciosFacturables: ServicioFacturableConsulta[];
+  private _observacionesCobro: string | null;
   private _evolucionSOAP: EvolucionSOAP;
   private _recomendaciones: string | null;
   private _motivoCancelacion: string | null;
@@ -155,6 +168,8 @@ export class ConsultaOdontologica {
     this._exploracionFisica = props.exploracionFisica;
     this._diagnosticos = [...props.diagnosticos];
     this._procedimientosRealizados = [...props.procedimientosRealizados];
+    this._serviciosFacturables = props.serviciosFacturables ? [...props.serviciosFacturables] : [];
+    this._observacionesCobro = props.observacionesCobro?.trim() || null;
     this._evolucionSOAP = props.evolucionSOAP;
     this._recomendaciones = props.recomendaciones?.trim() || null;
     this._motivoCancelacion = props.motivoCancelacion?.trim() || null;
@@ -205,6 +220,8 @@ export class ConsultaOdontologica {
       exploracionFisica: props.exploracionFisica ?? ExploracionFisica.vacia(),
       diagnosticos: props.diagnosticos ?? [],
       procedimientosRealizados: props.procedimientosRealizados ?? [],
+      serviciosFacturables: props.serviciosFacturables ?? [],
+      observacionesCobro: props.observacionesCobro ?? null,
       evolucionSOAP: props.evolucionSOAP ?? EvolucionSOAP.vacia(),
       recomendaciones: props.recomendaciones ?? null,
       motivoCancelacion: null,
@@ -263,16 +280,42 @@ export class ConsultaOdontologica {
 
   /**
    * Transiciona la consulta de EN_CURSO a COMPLETADA sellando los datos clínicos (INV-CONS-04, 05).
-   * Requiere validación de requisitos clínicos mínimos:
-   * 1. Motivo de consulta no vacío (>= 5 caracteres).
-   * 2. Exploración física con inspección intraoral documentada.
-   * 3. Al menos 1 diagnóstico registrado.
+   * Opcionalmente congela los servicios facturables y observaciones de cobro para integración con MS1.
+   * Admite consultas sin servicios facturables (consultas de control o sin costo adicional).
+   *
    * @param actualizadoPor Odontólogo responsable del cierre.
-   * @param ahora Fecha de reloj inyectable.
+   * @param opcionesOFecha Opciones de cierre (servicios facturables, observaciones) o fecha de reloj.
+   * @param fechaFallback Fecha de reloj cuando el 2do parámetro son opciones.
    */
-  completar(actualizadoPor: OdontologoId, ahora: Date = new Date()): void {
+  completar(
+    actualizadoPor: OdontologoId,
+    opcionesOFecha?: Date | OpcionesCompletarConsulta,
+    fechaFallback?: Date,
+  ): void {
     if (this._estado !== EstadoConsulta.EN_CURSO) {
       throw new TransicionEstadoConsultaInvalidaError(this._estado, EstadoConsulta.COMPLETADA);
+    }
+
+    let ahora = new Date();
+    let serviciosFacturables: ServicioFacturableConsulta[] = [];
+    let observacionesCobro: string | null = null;
+
+    if (opcionesOFecha instanceof Date) {
+      ahora = opcionesOFecha;
+    } else if (opcionesOFecha && typeof opcionesOFecha === 'object') {
+      if (opcionesOFecha.ahora instanceof Date) {
+        ahora = opcionesOFecha.ahora;
+      } else if (fechaFallback instanceof Date) {
+        ahora = fechaFallback;
+      }
+      if (opcionesOFecha.serviciosFacturables) {
+        serviciosFacturables = [...opcionesOFecha.serviciosFacturables];
+      }
+      if (opcionesOFecha.observacionesCobro !== undefined) {
+        observacionesCobro = opcionesOFecha.observacionesCobro?.trim() || null;
+      }
+    } else if (fechaFallback instanceof Date) {
+      ahora = fechaFallback;
     }
 
     const motivosIncumplidos: string[] = [];
@@ -294,6 +337,8 @@ export class ConsultaOdontologica {
     }
 
     this._estado = EstadoConsulta.COMPLETADA;
+    this._serviciosFacturables = serviciosFacturables;
+    this._observacionesCobro = observacionesCobro;
     this._cerradaEn = ahora;
     this._actualizadoEn = ahora;
     this._actualizadoPor = actualizadoPor;
@@ -397,6 +442,26 @@ export class ConsultaOdontologica {
 
   get procedimientosRealizados(): ReadonlyArray<ProcedimientoRealizado> {
     return Object.freeze([...this._procedimientosRealizados]);
+  }
+
+  get serviciosFacturables(): ReadonlyArray<ServicioFacturableConsulta> {
+    return Object.freeze([...this._serviciosFacturables]);
+  }
+
+  get observacionesCobro(): string | null {
+    return this._observacionesCobro;
+  }
+
+  get tieneServiciosFacturables(): boolean {
+    return this._serviciosFacturables.length > 0;
+  }
+
+  calcularTotalFacturableBs(): string {
+    const total = this._serviciosFacturables.reduce(
+      (sum, item) => sum + Number(item.calcularSubtotalBs()),
+      0,
+    );
+    return total.toFixed(2);
   }
 
   get evolucionSOAP(): EvolucionSOAP {

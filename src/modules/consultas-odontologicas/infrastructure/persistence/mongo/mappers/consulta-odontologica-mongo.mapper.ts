@@ -9,6 +9,7 @@ import { AnamnesisActual } from '../../../../domain/value-objects/anamnesis-actu
 import { ExploracionFisica } from '../../../../domain/value-objects/exploracion-fisica.vo.js';
 import { DiagnosticoItem } from '../../../../domain/value-objects/diagnostico-item.vo.js';
 import { ProcedimientoRealizado } from '../../../../domain/value-objects/procedimiento-realizado.vo.js';
+import { ServicioFacturableConsulta } from '../../../../domain/value-objects/servicio-facturable-consulta.vo.js';
 import { PiezaDentalFDI } from '../../../../domain/value-objects/pieza-dental-fdi.vo.js';
 import { EvolucionSOAP } from '../../../../domain/value-objects/evolucion-soap.vo.js';
 import { SnapshotRiesgoClinico } from '../../../../domain/value-objects/snapshot-riesgo-clinico.vo.js';
@@ -59,6 +60,15 @@ export class ConsultaOdontologicaMongoMapper {
         piezaDental: p.piezaDental ? p.piezaDental.valor : null,
         observaciones: p.observaciones,
       })),
+      serviciosFacturables: consulta.serviciosFacturables.map((s) => ({
+        servicioId: s.servicioId,
+        codigo: s.codigo,
+        nombre: s.nombre,
+        cantidad: s.cantidad,
+        precioUnitarioBs: s.precioUnitarioBs,
+        piezaDental: s.piezaDental,
+      })),
+      observacionesCobro: consulta.observacionesCobro,
       evolucionSOAP: {
         subjetivo: consulta.evolucionSOAP.subjetivo,
         objetivo: consulta.evolucionSOAP.objetivo,
@@ -108,6 +118,17 @@ export class ConsultaOdontologicaMongoMapper {
       })
     );
 
+    const serviciosFacturables = (doc.serviciosFacturables ?? []).map((s) =>
+      ServicioFacturableConsulta.reconstituir({
+        servicioId: s.servicioId,
+        codigo: s.codigo ?? null,
+        nombre: s.nombre,
+        cantidad: s.cantidad,
+        precioUnitarioBs: s.precioUnitarioBs,
+        piezaDental: s.piezaDental ?? null,
+      })
+    );
+
     return ConsultaOdontologica.reconstituir({
       id: ConsultaId.reconstituir(doc._id),
       historiaClinicaId: HistoriaClinicaId.reconstituir(doc.historiaClinicaId),
@@ -132,6 +153,8 @@ export class ConsultaOdontologicaMongoMapper {
       }),
       diagnosticos,
       procedimientosRealizados: procedimientos,
+      serviciosFacturables,
+      observacionesCobro: doc.observacionesCobro ?? null,
       evolucionSOAP: EvolucionSOAP.reconstituir({
         subjetivo: doc.evolucionSOAP?.subjetivo ?? null,
         objetivo: doc.evolucionSOAP?.objetivo ?? null,

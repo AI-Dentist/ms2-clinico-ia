@@ -50,6 +50,17 @@ export class ConsultaOdontologicaMapper {
         piezaDental: p.piezaDental ? p.piezaDental.valor : null,
         observaciones: p.observaciones,
       })),
+      serviciosFacturables: consulta.serviciosFacturables.map((s) => ({
+        servicioId: s.servicioId,
+        codigo: s.codigo,
+        nombre: s.nombre,
+        cantidad: s.cantidad,
+        precioUnitarioBs: s.precioUnitarioBs,
+        subtotalBs: s.calcularSubtotalBs(),
+        piezaDental: s.piezaDental,
+      })),
+      observacionesCobro: consulta.observacionesCobro,
+      totalFacturableBs: consulta.calcularTotalFacturableBs(),
       evolucionSOAP: {
         subjetivo: consulta.evolucionSOAP.subjetivo,
         objetivo: consulta.evolucionSOAP.objetivo,

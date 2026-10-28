@@ -35,6 +35,16 @@ export interface ProcedimientoRealizadoDto {
   observaciones: string | null;
 }
 
+export interface ServicioFacturableResponseDto {
+  servicioId: string;
+  codigo: string | null;
+  nombre: string;
+  cantidad: number;
+  precioUnitarioBs: string;
+  subtotalBs: string;
+  piezaDental: number | null;
+}
+
 export interface EvolucionSOAPDto {
   subjetivo: string | null;
   objetivo: string | null;
@@ -62,6 +72,9 @@ export interface ConsultaOdontologicaResponseDto {
   exploracionFisica: ExploracionFisicaDto;
   diagnosticos: DiagnosticoItemDto[];
   procedimientosRealizados: ProcedimientoRealizadoDto[];
+  serviciosFacturables: ServicioFacturableResponseDto[];
+  observacionesCobro: string | null;
+  totalFacturableBs: string;
   evolucionSOAP: EvolucionSOAPDto;
   recomendaciones: string | null;
   motivoCancelacion: string | null;

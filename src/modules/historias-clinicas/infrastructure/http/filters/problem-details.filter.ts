@@ -26,6 +26,7 @@ import {
   IdServicioInvalidoError,
 } from '../../../../consultas-odontologicas/infrastructure/adapters/errors/index.js';
 import { ServicioCatalogoNoEncontradoError } from '../../../../consultas-odontologicas/application/errors/servicio-catalogo-no-encontrado.error.js';
+import { ServicioFacturableInvalidoError } from '../../../../consultas-odontologicas/domain/errors/servicio-facturable-invalido.error.js';
 import { ConsultaNoEncontradaError } from '../../../../consultas-odontologicas/domain/errors/consulta-no-encontrada.error.js';
 import { ConflictoConcurrenteConsultaError } from '../../../../consultas-odontologicas/domain/errors/conflicto-concurrente-consulta.error.js';
 import { CitaInvalidaParaConsultaError } from '../../../../consultas-odontologicas/domain/errors/cita-invalida-para-consulta.error.js';
@@ -133,6 +134,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       title = 'Servicio no encontrado en el catálogo';
       detail = exception.message;
       type = 'https://api.odontoclinic.local/errors/service-not-found';
+    } else if (exception instanceof ServicioFacturableInvalidoError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Servicio facturable inválido';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/invalid-billable-service';
     } else if (exception instanceof AutenticacionMs1Error) {
       status = HttpStatus.BAD_GATEWAY;
       title = 'Error de autenticación con catálogo externo';

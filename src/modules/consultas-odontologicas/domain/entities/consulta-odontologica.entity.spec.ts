@@ -12,6 +12,7 @@ import { ExploracionFisica } from '../value-objects/exploracion-fisica.vo.js';
 import { DiagnosticoItem } from '../value-objects/diagnostico-item.vo.js';
 import { TipoDiagnostico } from '../value-objects/tipo-diagnostico.enum.js';
 import { ProcedimientoRealizado } from '../value-objects/procedimiento-realizado.vo.js';
+import { ServicioFacturableConsulta } from '../value-objects/servicio-facturable-consulta.vo.js';
 import { PiezaDentalFDI } from '../value-objects/pieza-dental-fdi.vo.js';
 import { EvolucionSOAP } from '../value-objects/evolucion-soap.vo.js';
 import { SnapshotRiesgoClinico } from '../value-objects/snapshot-riesgo-clinico.vo.js';
@@ -504,6 +505,173 @@ describe('ConsultaOdontologica Aggregate Root (Invariantes y Máquina de Estados
           version: 1,
         })
       ).toThrow('La versión de historia referenciada debe ser mayor o igual a 1');
+    });
+  });
+
+  describe('Servicios Facturables y Cierre Económico (MS1)', () => {
+    it('1. Debe completar la consulta sin servicios facturables (consulta sin cobro)', () => {
+      const consulta = ConsultaOdontologica.abrir({
+        historiaClinicaId,
+        pacienteId,
+        odontologoId,
+        versionHistoriaReferenciada: 1,
+        snapshotRiesgoClinico: SnapshotRiesgoClinico.vacio(),
+        motivoConsulta: MotivoConsulta.crear('Control posoperatorio'),
+        exploracionFisica: ExploracionFisica.crear({
+          inspeccionIntraoral: 'Cicatrización adecuada sin signos de infección.',
+        }),
+        diagnosticos: [
+          DiagnosticoItem.crear({
+            codigoCIE10: 'Z09.0',
+            descripcion: 'Examen de seguimiento posquirúrgico',
+            tipo: TipoDiagnostico.DEFINITIVO,
+          }),
+        ],
+      });
+
+      consulta.completar(odontologoId);
+
+      expect(consulta.estado).toBe(EstadoConsulta.COMPLETADA);
+      expect(consulta.serviciosFacturables).toEqual([]);
+      expect(consulta.tieneServiciosFacturables).toBe(false);
+      expect(consulta.calcularTotalFacturableBs()).toBe('0.00');
+    });
+
+    it('2. Debe registrar servicios facturables y calcular el total en bolivianos', () => {
+      const consulta = ConsultaOdontologica.abrir({
+        historiaClinicaId,
+        pacienteId,
+        odontologoId,
+        versionHistoriaReferenciada: 1,
+        snapshotRiesgoClinico: SnapshotRiesgoClinico.vacio(),
+        motivoConsulta: MotivoConsulta.crear('Profilaxis y restauración'),
+        exploracionFisica: ExploracionFisica.crear({
+          inspeccionIntraoral: 'Exploración completa.',
+        }),
+        diagnosticos: [
+          DiagnosticoItem.crear({
+            descripcion: 'Caries y placa bacteriana',
+            tipo: TipoDiagnostico.DEFINITIVO,
+          }),
+        ],
+      });
+
+      const s1 = ServicioFacturableConsulta.crear({
+        servicioId: '550e8400-e29b-41d4-a716-446655440001',
+        nombre: 'Limpieza Ultrasonido',
+        cantidad: 1,
+        precioUnitarioBs: '150.00',
+      });
+
+      const s2 = ServicioFacturableConsulta.crear({
+        servicioId: '550e8400-e29b-41d4-a716-446655440002',
+        nombre: 'Resina Fotocurable',
+        cantidad: 2,
+        precioUnitarioBs: '200.50',
+        piezaDental: 16,
+      });
+
+      consulta.completar(odontologoId, {
+        serviciosFacturables: [s1, s2],
+        observacionesCobro: 'Cobro en cuotas autorizado',
+      });
+
+      expect(consulta.serviciosFacturables).toHaveLength(2);
+      expect(consulta.tieneServiciosFacturables).toBe(true);
+      expect(consulta.observacionesCobro).toBe('Cobro en cuotas autorizado');
+      // 150.00 + (200.50 * 2) = 150.00 + 401.00 = 551.00
+      expect(consulta.calcularTotalFacturableBs()).toBe('551.00');
+    });
+
+    it('3. Debe mantener completa independencia entre ProcedimientoRealizado y ServicioFacturableConsulta', () => {
+      const procClinico = ProcedimientoRealizado.crear({
+        codigo: 'PROC-01',
+        descripcion: 'Apertura cameral y desinfección con hipoclorito',
+        piezaDental: PiezaDentalFDI.crear(16),
+      });
+
+      const consulta = ConsultaOdontologica.abrir({
+        historiaClinicaId,
+        pacienteId,
+        odontologoId,
+        versionHistoriaReferenciada: 1,
+        snapshotRiesgoClinico: SnapshotRiesgoClinico.vacio(),
+        motivoConsulta: MotivoConsulta.crear('Tratamiento de conductos'),
+        exploracionFisica: ExploracionFisica.crear({
+          inspeccionIntraoral: 'Exploración endodóntica.',
+        }),
+        diagnosticos: [
+          DiagnosticoItem.crear({
+            descripcion: 'Pulpitis irreversible',
+            tipo: TipoDiagnostico.DEFINITIVO,
+          }),
+        ],
+        procedimientosRealizados: [procClinico],
+      });
+
+      // El procedimiento clínico existe en sillón sin requerir servicio facturable
+      expect(consulta.procedimientosRealizados).toHaveLength(1);
+      expect(consulta.serviciosFacturables).toHaveLength(0);
+
+      // Ahora se completa facturando un servicio diferente o global
+      const servFacturable = ServicioFacturableConsulta.crear({
+        servicioId: '550e8400-e29b-41d4-a716-446655440003',
+        nombre: 'Endodoncia Molar Unirradicular',
+        cantidad: 1,
+        precioUnitarioBs: '500.00',
+        piezaDental: 16,
+      });
+
+      consulta.completar(odontologoId, {
+        serviciosFacturables: [servFacturable],
+      });
+
+      expect(consulta.procedimientosRealizados[0].descripcion).toBe(
+        'Apertura cameral y desinfección con hipoclorito',
+      );
+      expect(consulta.serviciosFacturables[0].nombre).toBe('Endodoncia Molar Unirradicular');
+      expect(consulta.calcularTotalFacturableBs()).toBe('500.00');
+    });
+
+    it('4. Debe reconstituir consultas antiguas de MongoDB sin serviciosFacturables de forma retrocompatible', () => {
+      const consultaAntigua = ConsultaOdontologica.reconstituir({
+        id: ConsultaId.generar(),
+        historiaClinicaId,
+        pacienteId,
+        odontologoId,
+        citaId: null,
+        versionHistoriaReferenciada: 1,
+        snapshotRiesgoClinico: SnapshotRiesgoClinico.vacio(),
+        fechaAtencion: new Date('2026-09-01T10:00:00.000Z'),
+        cerradaEn: new Date('2026-09-01T10:45:00.000Z'),
+        estado: EstadoConsulta.COMPLETADA,
+        motivoConsulta: MotivoConsulta.crear('Atención histórica'),
+        anamnesisActual: AnamnesisActual.vacia(),
+        exploracionFisica: ExploracionFisica.crear({
+          inspeccionIntraoral: 'Inspección realizada',
+        }),
+        diagnosticos: [
+          DiagnosticoItem.crear({
+            descripcion: 'Diagnóstico histórico',
+            tipo: TipoDiagnostico.DEFINITIVO,
+          }),
+        ],
+        procedimientosRealizados: [],
+        // serviciosFacturables y observacionesCobro omitidos intencionalmente
+        evolucionSOAP: EvolucionSOAP.vacia(),
+        recomendaciones: null,
+        motivoCancelacion: null,
+        version: 2,
+        creadoEn: new Date('2026-09-01T10:00:00.000Z'),
+        actualizadoEn: new Date('2026-09-01T10:45:00.000Z'),
+        creadoPor: odontologoId,
+        actualizadoPor: odontologoId,
+      });
+
+      expect(consultaAntigua.serviciosFacturables).toEqual([]);
+      expect(consultaAntigua.observacionesCobro).toBeNull();
+      expect(consultaAntigua.tieneServiciosFacturables).toBe(false);
+      expect(consultaAntigua.calcularTotalFacturableBs()).toBe('0.00');
     });
   });
 });

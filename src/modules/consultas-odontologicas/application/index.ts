@@ -11,9 +11,11 @@ export * from './queries/listar-consultas-por-historia.query.js';
 // DTOs
 export * from './dtos/consulta-odontologica-response.dto.js';
 export * from './dtos/listado-consultas-response.dto.js';
+export * from './dtos/consulta-finalizada-mensaje-plano.dto.js';
 
 // Mappers
 export * from './mappers/consulta-odontologica.mapper.js';
+export * from './mappers/consulta-orden-cobro-ms1.mapper.js';
 
 // Errors
 export * from './errors/autenticacion-requerida.error.js';

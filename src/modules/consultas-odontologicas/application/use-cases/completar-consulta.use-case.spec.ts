@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CompletarConsultaUseCase } from './completar-consulta.use-case.js';
 import type { IConsultaOdontologicaRepositoryPort } from '../../domain/ports/consulta-odontologica.repository.port.js';
 import type { IOdontologoContextPort } from '../../domain/ports/odontologo-context.port.js';
+import type { ICatalogoServiciosPort, ServicioCatalogoDto } from '../ports/catalogo-servicios.port.js';
 import { ConsultaNoEncontradaError } from '../../domain/errors/consulta-no-encontrada.error.js';
 import { ConflictoConcurrenteConsultaError } from '../../domain/errors/conflicto-concurrente-consulta.error.js';
 import { RequisitosCierreConsultaIncumplidosError } from '../../domain/errors/requisitos-cierre-consulta-incumplidos.error.js';
 import { TransicionEstadoConsultaInvalidaError } from '../../domain/errors/transicion-estado-consulta-invalida.error.js';
+import { ServicioFacturableInvalidoError } from '../../domain/errors/servicio-facturable-invalido.error.js';
 import { AutenticacionRequeridaError } from '../errors/autenticacion-requerida.error.js';
 import { ConsultaOdontologica } from '../../domain/entities/consulta-odontologica.entity.js';
 import { HistoriaClinicaId } from '../../domain/value-objects/historia-clinica-id.vo.js';
@@ -22,8 +24,29 @@ describe('CompletarConsultaUseCase', () => {
   let useCase: CompletarConsultaUseCase;
   let mockRepository: { [K in keyof IConsultaOdontologicaRepositoryPort]: ReturnType<typeof vi.fn> };
   let mockOdontologoContext: { [K in keyof IOdontologoContextPort]: ReturnType<typeof vi.fn> };
+  let mockCatalogoServicios: { [K in keyof ICatalogoServiciosPort]: ReturnType<typeof vi.fn> };
 
   const relojCierre = new Date('2026-10-22T11:00:00.000Z');
+  const SERVICIO_ACTIVO_ID = '550e8400-e29b-41d4-a716-446655440001';
+  const SERVICIO_INACTIVO_ID = '550e8400-e29b-41d4-a716-446655440002';
+
+  const mockServicioActivo: ServicioCatalogoDto = {
+    id: SERVICIO_ACTIVO_ID,
+    codigo: 'LIM-001',
+    nombre: 'Limpieza Dental Ultrasonido',
+    descripcion: 'Profilaxis dental completa',
+    precioBaseBs: '150.00',
+    activo: true,
+  };
+
+  const mockServicioInactivo: ServicioCatalogoDto = {
+    id: SERVICIO_INACTIVO_ID,
+    codigo: 'OBS-002',
+    nombre: 'Servicio Obsoleto',
+    descripcion: 'Descontinuado',
+    precioBaseBs: '50.00',
+    activo: false,
+  };
 
   const crearConsultaConRequisitos = (): ConsultaOdontologica => {
     const consulta = ConsultaOdontologica.abrir({
@@ -66,13 +89,23 @@ describe('CompletarConsultaUseCase', () => {
       obtenerOdontologoActual: vi.fn().mockResolvedValue({ odontologoId: 'od_001' }),
     };
 
+    mockCatalogoServicios = {
+      listarServiciosActivos: vi.fn().mockResolvedValue([mockServicioActivo]),
+      obtenerServicioPorId: vi.fn().mockImplementation((id: string) => {
+        if (id === SERVICIO_ACTIVO_ID) return Promise.resolve(mockServicioActivo);
+        if (id === SERVICIO_INACTIVO_ID) return Promise.resolve(mockServicioInactivo);
+        return Promise.resolve(null);
+      }),
+    };
+
     useCase = new CompletarConsultaUseCase(
       mockRepository as unknown as IConsultaOdontologicaRepositoryPort,
-      mockOdontologoContext as unknown as IOdontologoContextPort
+      mockOdontologoContext as unknown as IOdontologoContextPort,
+      mockCatalogoServicios as unknown as ICatalogoServiciosPort,
     );
   });
 
-  it('debe completar y sellar la consulta exitosamente cumpliendo requisitos mínimos clínicos', async () => {
+  it('1. debe completar y sellar la consulta sin servicios facturables (consulta sin cobro)', async () => {
     const consulta = crearConsultaConRequisitos();
     mockRepository.buscarPorId.mockResolvedValue(consulta);
 
@@ -82,26 +115,101 @@ describe('CompletarConsultaUseCase', () => {
         consultaId: consulta.id.valor,
         versionEsperada: consulta.version,
       },
-      relojCierre
+      relojCierre,
     );
 
     expect(result.estado).toBe(EstadoConsulta.COMPLETADA);
     expect(result.cerradaEn).toBe(relojCierre.toISOString());
-    expect(result.version).toBe(consulta.version); // Incrementó en completar()
+    expect(result.serviciosFacturables).toEqual([]);
+    expect(result.totalFacturableBs).toBe('0.00');
     expect(mockRepository.actualizar).toHaveBeenCalled();
   });
 
-  it('debe rechazar si no se envía token de autenticación', async () => {
+  it('2. debe congelar precios oficiales de MS1 al completar con servicios facturables válidos', async () => {
+    const consulta = crearConsultaConRequisitos();
+    mockRepository.buscarPorId.mockResolvedValue(consulta);
+
+    const result = await useCase.execute(
+      {
+        tokenAutenticacion: 'token_valido',
+        consultaId: consulta.id.valor,
+        versionEsperada: consulta.version,
+        serviciosFacturables: [
+          {
+            servicioId: SERVICIO_ACTIVO_ID,
+            cantidad: 2,
+            piezaDental: 16,
+          },
+        ],
+        observacionesCobro: 'Factura con NIT',
+      },
+      relojCierre,
+    );
+
+    expect(result.estado).toBe(EstadoConsulta.COMPLETADA);
+    expect(result.serviciosFacturables).toHaveLength(1);
+    expect(result.serviciosFacturables[0]).toEqual({
+      servicioId: SERVICIO_ACTIVO_ID,
+      codigo: 'LIM-001',
+      nombre: 'Limpieza Dental Ultrasonido',
+      cantidad: 2,
+      precioUnitarioBs: '150.00',
+      subtotalBs: '300.00',
+      piezaDental: 16,
+    });
+    expect(result.totalFacturableBs).toBe('300.00');
+    expect(result.observacionesCobro).toBe('Factura con NIT');
+  });
+
+  it('3. debe rechazar si un servicio facturable no existe en el catálogo de MS1', async () => {
+    const consulta = crearConsultaConRequisitos();
+    mockRepository.buscarPorId.mockResolvedValue(consulta);
+
+    await expect(
+      useCase.execute({
+        tokenAutenticacion: 'token_valido',
+        consultaId: consulta.id.valor,
+        versionEsperada: consulta.version,
+        serviciosFacturables: [
+          {
+            servicioId: '550e8400-e29b-41d4-a716-446655449999',
+            cantidad: 1,
+          },
+        ],
+      }),
+    ).rejects.toThrow(ServicioFacturableInvalidoError);
+  });
+
+  it('4. debe rechazar si un servicio facturable está inactivo en el catálogo de MS1', async () => {
+    const consulta = crearConsultaConRequisitos();
+    mockRepository.buscarPorId.mockResolvedValue(consulta);
+
+    await expect(
+      useCase.execute({
+        tokenAutenticacion: 'token_valido',
+        consultaId: consulta.id.valor,
+        versionEsperada: consulta.version,
+        serviciosFacturables: [
+          {
+            servicioId: SERVICIO_INACTIVO_ID,
+            cantidad: 1,
+          },
+        ],
+      }),
+    ).rejects.toThrow(/se encuentra inactivo en MS1/);
+  });
+
+  it('5. debe rechazar si no se envía token de autenticación', async () => {
     await expect(
       useCase.execute({
         tokenAutenticacion: '',
         consultaId: 'cons_123',
         versionEsperada: 1,
-      })
+      }),
     ).rejects.toThrow(AutenticacionRequeridaError);
   });
 
-  it('debe rechazar si la consulta no existe', async () => {
+  it('6. debe rechazar si la consulta no existe', async () => {
     mockRepository.buscarPorId.mockResolvedValue(null);
 
     await expect(
@@ -109,11 +217,11 @@ describe('CompletarConsultaUseCase', () => {
         tokenAutenticacion: 'token_valido',
         consultaId: 'cons_no_existe',
         versionEsperada: 1,
-      })
+      }),
     ).rejects.toThrow(ConsultaNoEncontradaError);
   });
 
-  it('debe rechazar por conflicto de concurrencia optimista si la versión esperada no coincide', async () => {
+  it('7. debe rechazar por conflicto de concurrencia optimista si la versión esperada no coincide', async () => {
     const consulta = crearConsultaConRequisitos();
     mockRepository.buscarPorId.mockResolvedValue(consulta);
 
@@ -122,12 +230,11 @@ describe('CompletarConsultaUseCase', () => {
         tokenAutenticacion: 'token_valido',
         consultaId: consulta.id.valor,
         versionEsperada: 99,
-      })
+      }),
     ).rejects.toThrow(ConflictoConcurrenteConsultaError);
   });
 
-  it('debe rechazar si no cumple con los requisitos mínimos clínicos (INV-CONS-05)', async () => {
-    // Consulta abierta sin exploración ni diagnósticos
+  it('8. debe rechazar si no cumple con los requisitos mínimos clínicos (INV-CONS-05)', async () => {
     const consultaIncompleta = ConsultaOdontologica.abrir({
       historiaClinicaId: HistoriaClinicaId.crear('hc_123'),
       pacienteId: PacienteId.crear('pac_123'),
@@ -143,11 +250,11 @@ describe('CompletarConsultaUseCase', () => {
         tokenAutenticacion: 'token_valido',
         consultaId: consultaIncompleta.id.valor,
         versionEsperada: 1,
-      })
+      }),
     ).rejects.toThrow(RequisitosCierreConsultaIncumplidosError);
   });
 
-  it('debe rechazar completar si ya fue completada previamente', async () => {
+  it('9. debe rechazar completar si ya fue completada previamente', async () => {
     const consulta = crearConsultaConRequisitos();
     consulta.completar(OdontologoId.crear('od_001'));
     mockRepository.buscarPorId.mockResolvedValue(consulta);
@@ -157,7 +264,7 @@ describe('CompletarConsultaUseCase', () => {
         tokenAutenticacion: 'token_valido',
         consultaId: consulta.id.valor,
         versionEsperada: consulta.version,
-      })
+      }),
     ).rejects.toThrow(TransicionEstadoConsultaInvalidaError);
   });
 });

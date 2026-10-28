@@ -21,6 +21,10 @@ import {
   ProcedimientoSchema,
 } from './procedimiento.schema.js';
 import {
+  ServicioFacturableDocument,
+  ServicioFacturableSchema,
+} from './servicio-facturable.schema.js';
+import {
   EvolucionSOAPDocument,
   EvolucionSOAPSchema,
 } from './evolucion-soap.schema.js';
@@ -81,6 +85,12 @@ export class ConsultaOdontologicaDocument {
 
   @Prop({ type: [ProcedimientoSchema], default: [] })
   procedimientosRealizados: ProcedimientoDocument[];
+
+  @Prop({ type: [ServicioFacturableSchema], default: [] })
+  serviciosFacturables: ServicioFacturableDocument[];
+
+  @Prop({ type: String, default: null })
+  observacionesCobro: string | null;
 
   @Prop({ type: EvolucionSOAPSchema, required: true })
   evolucionSOAP: EvolucionSOAPDocument;

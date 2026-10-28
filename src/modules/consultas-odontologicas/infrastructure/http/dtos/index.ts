@@ -6,5 +6,6 @@ export * from './evolucion-soap.http-dto.js';
 export * from './abrir-consulta.http-dto.js';
 export * from './actualizar-atencion.http-dto.js';
 export * from './completar-consulta.http-dto.js';
+export * from './item-servicio-facturable.http-dto.js';
 export * from './cancelar-consulta.http-dto.js';
 export * from './listar-consultas-query.http-dto.js';

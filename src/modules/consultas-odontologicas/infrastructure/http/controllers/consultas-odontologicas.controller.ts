@@ -259,6 +259,12 @@ export class ConsultasOdontologicasController {
       tokenAutenticacion: token,
       consultaId: id,
       versionEsperada: dto.versionEsperada,
+      serviciosFacturables: dto.serviciosFacturables?.map((s) => ({
+        servicioId: s.servicioId,
+        cantidad: s.cantidad,
+        piezaDental: s.piezaDental,
+      })),
+      observacionesCobro: dto.observacionesCobro,
     });
   }
 

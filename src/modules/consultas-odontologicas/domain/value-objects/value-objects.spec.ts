@@ -39,6 +39,17 @@ describe('Value Objects del Dominio de Consultas Odontológicas', () => {
       expect(id1.equals(id2)).toBe(true);
       expect(id1.equals(id3)).toBe(false);
     });
+
+    it('debe convertir a UUID canónico despojando el prefijo cons_', () => {
+      const uuidReal = '550e8400-e29b-41d4-a716-446655440000';
+      const id = ConsultaId.reconstituir(`cons_${uuidReal}`);
+      expect(id.toCanonicalUuid()).toBe(uuidReal);
+    });
+
+    it('debe rechazar toCanonicalUuid si el sufijo no es un UUID válido RFC 4122', () => {
+      const id = ConsultaId.reconstituir('cons_no-es-un-uuid-valido');
+      expect(() => id.toCanonicalUuid()).toThrow(/no cumple con el formato UUID RFC 4122/);
+    });
   });
 
   describe('MotivoConsulta', () => {
