@@ -18,6 +18,10 @@ export * from './mappers/consulta-odontologica.mapper.js';
 // Errors
 export * from './errors/autenticacion-requerida.error.js';
 export * from './errors/paciente-no-coincide.error.js';
+export * from './errors/servicio-catalogo-no-encontrado.error.js';
+
+// Ports
+export * from './ports/catalogo-servicios.port.js';
 
 // Use Cases
 export * from './use-cases/registrar-apertura-consulta.use-case.js';
@@ -26,3 +30,4 @@ export * from './use-cases/listar-consultas-por-historia.use-case.js';
 export * from './use-cases/actualizar-atencion-consulta.use-case.js';
 export * from './use-cases/completar-consulta.use-case.js';
 export * from './use-cases/cancelar-consulta.use-case.js';
+export * from './use-cases/consultar-catalogo-servicios.use-case.js';

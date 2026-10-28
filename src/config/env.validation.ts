@@ -2,6 +2,7 @@ export interface EnvironmentVariables {
   PORT: number;
   MONGODB_URI: string;
   PACIENTE_VALIDATOR_ADAPTER: 'mock' | 'graphql';
+  CATALOGO_SERVICIOS_ADAPTER: 'mock' | 'graphql';
   MS1_GRAPHQL_URL: string;
   MS1_TIMEOUT_MS: number;
   MS1_BEARER_TOKEN?: string;
@@ -37,6 +38,16 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
     );
   }
 
+  const rawCatalogoAdapter = typeof config.CATALOGO_SERVICIOS_ADAPTER === 'string'
+    ? config.CATALOGO_SERVICIOS_ADAPTER.trim().toLowerCase()
+    : 'mock';
+  const catalogoAdapter = rawCatalogoAdapter;
+  if (catalogoAdapter !== 'mock' && catalogoAdapter !== 'graphql') {
+    errors.push(
+      `Variable 'CATALOGO_SERVICIOS_ADAPTER' inválida ('${typeof config.CATALOGO_SERVICIOS_ADAPTER === 'string' ? config.CATALOGO_SERVICIOS_ADAPTER : 'no-string'}'). Valores admitidos: 'mock' | 'graphql'.`,
+    );
+  }
+
   const rawGraphqlUrl = typeof config.MS1_GRAPHQL_URL === 'string' && config.MS1_GRAPHQL_URL.trim()
     ? config.MS1_GRAPHQL_URL.trim()
     : 'http://127.0.0.1:8081/graphql';
@@ -66,6 +77,7 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
     PORT: port,
     MONGODB_URI: mongoUri as string,
     PACIENTE_VALIDATOR_ADAPTER: adapter as 'mock' | 'graphql',
+    CATALOGO_SERVICIOS_ADAPTER: catalogoAdapter as 'mock' | 'graphql',
     MS1_GRAPHQL_URL: graphqlUrl,
     MS1_TIMEOUT_MS: timeoutMs,
     ...(bearerToken ? { MS1_BEARER_TOKEN: bearerToken } : {}),

@@ -21,6 +21,11 @@ import {
   Ms1GraphqlError,
   IdPacienteInvalidoError,
 } from '../../adapters/errors/index.js';
+import {
+  CatalogoServiciosNoDisponibleError,
+  IdServicioInvalidoError,
+} from '../../../../consultas-odontologicas/infrastructure/adapters/errors/index.js';
+import { ServicioCatalogoNoEncontradoError } from '../../../../consultas-odontologicas/application/errors/servicio-catalogo-no-encontrado.error.js';
 import { ConsultaNoEncontradaError } from '../../../../consultas-odontologicas/domain/errors/consulta-no-encontrada.error.js';
 import { ConflictoConcurrenteConsultaError } from '../../../../consultas-odontologicas/domain/errors/conflicto-concurrente-consulta.error.js';
 import { CitaInvalidaParaConsultaError } from '../../../../consultas-odontologicas/domain/errors/cita-invalida-para-consulta.error.js';
@@ -113,6 +118,21 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       title = 'Servicio de catálogo de pacientes no disponible';
       detail = exception.message;
       type = 'https://api.odontoclinic.local/errors/service-unavailable';
+    } else if (exception instanceof CatalogoServiciosNoDisponibleError) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      title = 'Servicio de catálogo de servicios no disponible';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/service-unavailable';
+    } else if (exception instanceof IdServicioInvalidoError) {
+      status = HttpStatus.UNPROCESSABLE_ENTITY;
+      title = 'Identificador de servicio inválido';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/invalid-service-id';
+    } else if (exception instanceof ServicioCatalogoNoEncontradoError) {
+      status = HttpStatus.NOT_FOUND;
+      title = 'Servicio no encontrado en el catálogo';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/service-not-found';
     } else if (exception instanceof AutenticacionMs1Error) {
       status = HttpStatus.BAD_GATEWAY;
       title = 'Error de autenticación con catálogo externo';

@@ -14,6 +14,7 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -35,8 +36,10 @@ import {
   ActualizarAtencionConsultaUseCase,
   CompletarConsultaUseCase,
   CancelarConsultaUseCase,
+  ConsultarCatalogoServiciosUseCase,
   type ConsultaOdontologicaResponseDto,
   type ListadoConsultasResponseDto,
+  type ServicioCatalogoDto,
 } from '../../../application/index.js';
 
 @ApiTags('Consultas Odontológicas')
@@ -51,6 +54,7 @@ export class ConsultasOdontologicasController {
     private readonly actualizarAtencionConsultaUseCase: ActualizarAtencionConsultaUseCase,
     private readonly completarConsultaUseCase: CompletarConsultaUseCase,
     private readonly cancelarConsultaUseCase: CancelarConsultaUseCase,
+    private readonly consultarCatalogoServiciosUseCase: ConsultarCatalogoServiciosUseCase,
   ) {}
 
   @Post()
@@ -117,6 +121,53 @@ export class ConsultasOdontologicasController {
       limite: query.limite,
       offset: query.offset,
     });
+  }
+
+  @Get('catalogo-servicios')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Listar servicios odontológicos activos del catálogo de MS1',
+    description:
+      'Consulta los servicios odontológicos activos disponibles en el ERP (MS1), con filtro opcional por especialidad. Preserva la precisión monetaria de precioBaseBs como string decimal.',
+  })
+  @ApiQuery({
+    name: 'especialidadId',
+    required: false,
+    description: 'UUID de la especialidad para filtrar servicios',
+    example: '60000000-0000-0000-0000-000000000010',
+  })
+  @ApiResponse({ status: 200, description: 'Listado de servicios odontológicos activos.' })
+  @ApiResponse({ status: 401, description: 'No autenticado o credenciales inválidas.' })
+  @ApiResponse({ status: 502, description: 'Error de comunicación o GraphQL con MS1.' })
+  @ApiResponse({ status: 503, description: 'Catálogo de MS1 no disponible (timeout/red).' })
+  async listarCatalogoServicios(
+    @Query('especialidadId') especialidadId?: string,
+  ): Promise<ServicioCatalogoDto[]> {
+    return this.consultarCatalogoServiciosUseCase.listar(especialidadId);
+  }
+
+  @Get('catalogo-servicios/:servicioId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener un servicio odontológico por su ID desde el catálogo de MS1',
+    description:
+      'Recupera el detalle de un servicio odontológico a partir de su UUID canónico en MS1.',
+  })
+  @ApiParam({
+    name: 'servicioId',
+    description: 'UUID canónico del servicio en MS1',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+  })
+  @ApiResponse({ status: 200, description: 'Detalle del servicio odontológico.' })
+  @ApiResponse({ status: 401, description: 'No autenticado.' })
+  @ApiResponse({ status: 404, description: 'Servicio no encontrado en el catálogo de MS1.' })
+  @ApiResponse({ status: 422, description: 'Formato de ID de servicio inválido (no es UUID RFC 4122).' })
+  @ApiResponse({ status: 502, description: 'Error de comunicación o GraphQL con MS1.' })
+  @ApiResponse({ status: 503, description: 'Catálogo de MS1 no disponible.' })
+  async obtenerServicioCatalogoPorId(
+    @Param('servicioId') servicioId: string,
+  ): Promise<ServicioCatalogoDto> {
+    return this.consultarCatalogoServiciosUseCase.obtenerPorId(servicioId);
   }
 
   @Get(':id')
