@@ -21,8 +21,13 @@ export interface IConsultaOdontologicaRepositoryPort {
   /**
    * Actualiza una consulta existente verificando la versión esperada (concurrencia optimista).
    * Lanza ConflictoConcurrenteConsultaError si la versión persistida no coincide con versionEsperada.
+   * Admite opcionalmente una sesión transaccional (ClientSession) para Atomic Outbox.
    */
-  actualizar(consulta: ConsultaOdontologica, versionEsperada: number): Promise<void>;
+  actualizar(
+    consulta: ConsultaOdontologica,
+    versionEsperada: number,
+    session?: unknown
+  ): Promise<void>;
 
   /**
    * Busca una consulta por su identificador único canónico.

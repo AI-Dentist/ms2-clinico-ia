@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, type ClientSession } from 'mongoose';
 import type {
   IConsultaOdontologicaRepositoryPort,
   ListadoConsultasResultado,
@@ -111,24 +111,30 @@ export class MongoConsultaOdontologicaRepository implements IConsultaOdontologic
     };
   }
 
-  async actualizar(consulta: ConsultaOdontologica, versionEsperada: number): Promise<void> {
+  async actualizar(
+    consulta: ConsultaOdontologica,
+    versionEsperada: number,
+    session?: unknown
+  ): Promise<void> {
+    const mongoSession = (session as ClientSession) || undefined;
+
     // 1. Extraer _id para no mutarlo en $set
     const { _id, ...docParaActualizar } = ConsultaOdontologicaMongoMapper.toPersistence(consulta);
 
     try {
-      // 2. Actualización atómica con concurrencia optimista
+      // 2. Actualización atómica con concurrencia optimista y sesión transaccional opcional
       const docActualizado = await this.model
         .findOneAndUpdate(
           { _id: consulta.id.valor, version: versionEsperada },
           { $set: docParaActualizar },
-          { returnDocument: 'after', runValidators: true }
+          { returnDocument: 'after', runValidators: true, session: mongoSession }
         )
         .exec();
 
       if (!docActualizado) {
         // Distinguir entre consulta inexistente y conflicto de concurrencia
         const docExistente = await this.model
-          .findById(consulta.id.valor)
+          .findById(consulta.id.valor, null, { session: mongoSession })
           .select('version')
           .lean()
           .exec();

@@ -8,6 +8,7 @@ import { HistoriasClinicasModule } from './modules/historias-clinicas/historias-
 import { ConsultasOdontologicasModule } from './modules/consultas-odontologicas/consultas-odontologicas.module.js';
 import { OdontogramasModule } from './modules/odontogramas/odontogramas.module.js';
 import { EstudiosModule } from './modules/estudios/estudios.module.js';
+import { OutboxModule } from './modules/outbox/outbox.module.js';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { EstudiosModule } from './modules/estudios/estudios.module.js';
     ConsultasOdontologicasModule,
     OdontogramasModule,
     EstudiosModule,
+    OutboxModule,
   ],
   controllers: [AppController],
   providers: [AppService],

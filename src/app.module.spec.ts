@@ -10,6 +10,7 @@ import { ConsultaOdontologicaDocument } from './modules/consultas-odontologicas/
 import { LaboratorioMongo } from './modules/estudios/infrastructure/persistence/mongo/schemas/laboratorio.schema.js';
 import { TipoEstudioMongo } from './modules/estudios/infrastructure/persistence/mongo/schemas/tipo-estudio.schema.js';
 import { SolicitudEstudioMongo } from './modules/estudios/infrastructure/persistence/mongo/schemas/solicitud-estudio.schema.js';
+import { OutboxEventDocument } from './modules/outbox/infrastructure/persistence/mongo/schemas/outbox-event.schema.js';
 
 describe('AppModule Integration (with mocked DB)', () => {
   let AppModuleClass: any;
@@ -61,6 +62,8 @@ describe('AppModule Integration (with mocked DB)', () => {
       .overrideProvider(getModelToken(TipoEstudioMongo.name))
       .useValue(mockModel)
       .overrideProvider(getModelToken(SolicitudEstudioMongo.name))
+      .useValue(mockModel)
+      .overrideProvider(getModelToken(OutboxEventDocument.name))
       .useValue(mockModel)
       .compile();
 
