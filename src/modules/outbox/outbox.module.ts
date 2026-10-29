@@ -8,6 +8,7 @@ import {
 import { MongoOutboxRepository } from './infrastructure/persistence/mongo/repositories/mongo-outbox.repository.js';
 import { OUTBOX_REPOSITORY_PORT } from './domain/ports/outbox-repository.port.js';
 import { MockRabbitMqPublisherAdapter } from './infrastructure/messaging/mock-rabbitmq-publisher.adapter.js';
+import { AmqpRabbitMqPublisherAdapter } from './infrastructure/messaging/amqp-rabbitmq-publisher.adapter.js';
 import { RABBITMQ_PUBLISHER_PORT } from './domain/ports/rabbitmq-publisher.port.js';
 import { OutboxRelayWorker } from './infrastructure/workers/outbox-relay.worker.js';
 
@@ -25,10 +26,12 @@ import { OutboxRelayWorker } from './infrastructure/workers/outbox-relay.worker.
       useClass: MongoOutboxRepository,
     },
     MockRabbitMqPublisherAdapter,
+    AmqpRabbitMqPublisherAdapter,
     {
       provide: RABBITMQ_PUBLISHER_PORT,
       useFactory: (
         mockAdapter: MockRabbitMqPublisherAdapter,
+        amqpAdapter: AmqpRabbitMqPublisherAdapter,
         configService?: ConfigService,
       ) => {
         const adapterType =
@@ -37,13 +40,13 @@ import { OutboxRelayWorker } from './infrastructure/workers/outbox-relay.worker.
           'mock';
 
         if (adapterType === 'amqp') {
-          // El adaptador real AMQP se conectará cuando el usuario lo habilite explícitamente
-          return mockAdapter;
+          return amqpAdapter;
         }
         return mockAdapter;
       },
       inject: [
         MockRabbitMqPublisherAdapter,
+        AmqpRabbitMqPublisherAdapter,
         { token: ConfigService, optional: true },
       ],
     },
@@ -52,6 +55,8 @@ import { OutboxRelayWorker } from './infrastructure/workers/outbox-relay.worker.
   exports: [
     OUTBOX_REPOSITORY_PORT,
     RABBITMQ_PUBLISHER_PORT,
+    MockRabbitMqPublisherAdapter,
+    AmqpRabbitMqPublisherAdapter,
     OutboxRelayWorker,
   ],
 })
