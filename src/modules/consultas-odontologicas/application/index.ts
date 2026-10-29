@@ -24,6 +24,7 @@ export * from './errors/servicio-catalogo-no-encontrado.error.js';
 
 // Ports
 export * from './ports/catalogo-servicios.port.js';
+export * from './ports/unit-of-work-cierre-consulta.port.js';
 
 // Use Cases
 export * from './use-cases/registrar-apertura-consulta.use-case.js';

@@ -11,6 +11,12 @@ import {
   CATALOGO_SERVICIOS_PORT,
   type ICatalogoServiciosPort,
 } from '../ports/catalogo-servicios.port.js';
+import {
+  UNIT_OF_WORK_CIERRE_CONSULTA_PORT,
+  type IUnitOfWorkCierreConsultaPort,
+} from '../ports/unit-of-work-cierre-consulta.port.js';
+import { ConsultaOrdenCobroMs1Mapper } from '../mappers/consulta-orden-cobro-ms1.mapper.js';
+import { OutboxEvent } from '../../../outbox/domain/entities/outbox-event.entity.js';
 import { ConsultaId } from '../../domain/value-objects/consulta-id.vo.js';
 import { OdontologoId } from '../../domain/value-objects/odontologo-id.vo.js';
 import { ServicioFacturableConsulta } from '../../domain/value-objects/servicio-facturable-consulta.vo.js';
@@ -31,6 +37,8 @@ export class CompletarConsultaUseCase {
     private readonly odontologoContextPort: IOdontologoContextPort,
     @Inject(CATALOGO_SERVICIOS_PORT)
     private readonly catalogoServiciosPort: ICatalogoServiciosPort,
+    @Inject(UNIT_OF_WORK_CIERRE_CONSULTA_PORT)
+    private readonly unitOfWork: IUnitOfWorkCierreConsultaPort,
   ) {}
 
   async execute(
@@ -115,8 +123,35 @@ export class CompletarConsultaUseCase {
       ahora,
     );
 
-    // 6. Persistir con concurrencia optimista
-    await this.consultaRepository.actualizar(consulta, command.versionEsperada);
+    // 6. Persistir con concurrencia optimista y Transactional Outbox si hay cobro
+    if (consulta.serviciosFacturables.length === 0) {
+      // 6a. Consulta sin cobro: preserva compatibilidad anterior sin transacción Outbox
+      await this.consultaRepository.actualizar(consulta, command.versionEsperada);
+    } else {
+      // 6b. Consulta con servicios facturables: persistencia atómica coordinada mediante Unit of Work
+      const mensajePlano = ConsultaOrdenCobroMs1Mapper.toMensajePlano(consulta);
+      if (!mensajePlano) {
+        throw new Error(
+          'Inconsistencia interna: la consulta con servicios facturables no generó mensaje plano para MS1.',
+        );
+      }
+
+      const eventoOutbox = OutboxEvent.crear({
+        aggregateId: consulta.id.toCanonicalUuid(),
+        aggregateType: 'ConsultaOdontologica',
+        eventType: 'clinica.consulta.finalizada',
+        exchange: 'dental.topic.exchange',
+        routingKey: 'clinica.consulta.finalizada',
+        payload: mensajePlano as unknown as Record<string, unknown>,
+        ahora,
+      });
+
+      await this.unitOfWork.ejecutarCierreConOutbox(
+        consulta,
+        command.versionEsperada,
+        eventoOutbox,
+      );
+    }
 
     return ConsultaOdontologicaMapper.toResponseDto(consulta);
   }

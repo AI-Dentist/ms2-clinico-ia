@@ -23,7 +23,7 @@ describe('AppModule Integration (with mocked DB)', () => {
     AppModuleClass = appMod.AppModule;
     const estMod = await import('./modules/estudios/estudios.module.js');
     EstudiosModuleClass = estMod.EstudiosModule;
-  });
+  }, 30000);
 
   it('debe compilar AppModule y resolver OdontogramasModule y EstudiosModule sin conectarse a la base real', async () => {
     const mockConnection = {

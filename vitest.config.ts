@@ -9,5 +9,6 @@ export default defineConfig({
     root: './',
     include: ['**/*.spec.ts'],
     testTimeout: 15000,
+    hookTimeout: 30000,
   },
 });

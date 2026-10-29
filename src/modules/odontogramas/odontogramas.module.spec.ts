@@ -11,6 +11,7 @@ import { OdontogramaDocument, OdontogramaSchema } from './infrastructure/persist
 import { RevisionOdontogramaDocument, RevisionOdontogramaSchema } from './infrastructure/persistence/mongo/schemas/revision-odontograma.schema.js';
 import { HistoriaClinicaDocument } from '../historias-clinicas/infrastructure/persistence/mongo/schemas/historia-clinica.schema.js';
 import { ConsultaOdontologicaDocument } from '../consultas-odontologicas/infrastructure/persistence/mongo/schemas/consulta-odontologica.schema.js';
+import { OutboxEventDocument } from '../outbox/infrastructure/persistence/mongo/schemas/outbox-event.schema.js';
 import { MongoOdontogramaRepository } from './infrastructure/persistence/mongo/repositories/mongo-odontograma.repository.js';
 import { ODONTOGRAMA_REPOSITORY } from './domain/ports/odontograma.repository.port.js';
 
@@ -87,6 +88,8 @@ describe('OdontogramasModule (NestJS DI & Integration Unit Tests)', () => {
       .overrideProvider(getModelToken(HistoriaClinicaDocument.name))
       .useValue(mockModel)
       .overrideProvider(getModelToken(ConsultaOdontologicaDocument.name))
+      .useValue(mockModel)
+      .overrideProvider(getModelToken(OutboxEventDocument.name))
       .useValue(mockModel)
       .compile();
   }

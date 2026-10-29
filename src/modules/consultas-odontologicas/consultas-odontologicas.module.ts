@@ -12,12 +12,15 @@ import { MockOdontologoContextAdapter } from './infrastructure/adapters/mock-odo
 import { MockCatalogoServiciosAdapter } from './infrastructure/adapters/mock-catalogo-servicios.adapter.js';
 import { GraphqlMs1CatalogoServiciosAdapter } from './infrastructure/adapters/graphql-ms1-catalogo-servicios.adapter.js';
 import { HistoriasClinicasModule } from '../historias-clinicas/historias-clinicas.module.js';
+import { OutboxModule } from '../outbox/outbox.module.js';
 
 import { CONSULTA_ODONTOLOGICA_REPOSITORY } from './domain/ports/consulta-odontologica.repository.port.js';
 import { HISTORIA_CLINICA_CONTEXT_PORT } from './domain/ports/historia-clinica-context.port.js';
 import { CITA_VALIDATOR_PORT } from './domain/ports/cita-validator.port.js';
 import { ODONTOLOGO_CONTEXT_PORT } from './domain/ports/odontologo-context.port.js';
 import { CATALOGO_SERVICIOS_PORT } from './application/ports/catalogo-servicios.port.js';
+import { UNIT_OF_WORK_CIERRE_CONSULTA_PORT } from './application/ports/unit-of-work-cierre-consulta.port.js';
+import { MongoUnitOfWorkCierreConsultaAdapter } from './infrastructure/persistence/mongo/unit-of-work-cierre-consulta.adapter.js';
 
 // Casos de uso de la capa Application
 import {
@@ -50,6 +53,7 @@ const USE_CASES = [
       { name: ConsultaOdontologicaDocument.name, schema: ConsultaOdontologicaSchema },
     ]),
     HistoriasClinicasModule,
+    OutboxModule,
   ],
   controllers: [ConsultasOdontologicasController],
   providers: [
@@ -96,11 +100,16 @@ const USE_CASES = [
         { token: ConfigService, optional: true },
       ],
     },
+    {
+      provide: UNIT_OF_WORK_CIERRE_CONSULTA_PORT,
+      useClass: MongoUnitOfWorkCierreConsultaAdapter,
+    },
     ...USE_CASES,
   ],
   exports: [
     CONSULTA_ODONTOLOGICA_REPOSITORY,
     CATALOGO_SERVICIOS_PORT,
+    UNIT_OF_WORK_CIERRE_CONSULTA_PORT,
     MockCatalogoServiciosAdapter,
     GraphqlMs1CatalogoServiciosAdapter,
     ...USE_CASES,

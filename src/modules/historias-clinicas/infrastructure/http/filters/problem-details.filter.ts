@@ -27,6 +27,7 @@ import {
 } from '../../../../consultas-odontologicas/infrastructure/adapters/errors/index.js';
 import { ServicioCatalogoNoEncontradoError } from '../../../../consultas-odontologicas/application/errors/servicio-catalogo-no-encontrado.error.js';
 import { ServicioFacturableInvalidoError } from '../../../../consultas-odontologicas/domain/errors/servicio-facturable-invalido.error.js';
+import { TransaccionesNoSoportadasError } from '../../../../consultas-odontologicas/domain/errors/transacciones-no-soportadas.error.js';
 import { ConsultaNoEncontradaError } from '../../../../consultas-odontologicas/domain/errors/consulta-no-encontrada.error.js';
 import { ConflictoConcurrenteConsultaError } from '../../../../consultas-odontologicas/domain/errors/conflicto-concurrente-consulta.error.js';
 import { CitaInvalidaParaConsultaError } from '../../../../consultas-odontologicas/domain/errors/cita-invalida-para-consulta.error.js';
@@ -182,6 +183,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       title = 'Conflicto de concurrencia optimista en consulta';
       detail = exception.message;
       type = 'https://api.odontoclinic.local/errors/conflict';
+    } else if (exception instanceof TransaccionesNoSoportadasError) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      title = 'Transacciones de base de datos no soportadas';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/transactions-not-supported';
     } else if (exception instanceof CitaInvalidaParaConsultaError) {
       const msg = exception.message.toLowerCase();
       if (

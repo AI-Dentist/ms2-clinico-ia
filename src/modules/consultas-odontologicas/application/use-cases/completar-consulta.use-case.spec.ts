@@ -3,11 +3,13 @@ import { CompletarConsultaUseCase } from './completar-consulta.use-case.js';
 import type { IConsultaOdontologicaRepositoryPort } from '../../domain/ports/consulta-odontologica.repository.port.js';
 import type { IOdontologoContextPort } from '../../domain/ports/odontologo-context.port.js';
 import type { ICatalogoServiciosPort, ServicioCatalogoDto } from '../ports/catalogo-servicios.port.js';
+import type { IUnitOfWorkCierreConsultaPort } from '../ports/unit-of-work-cierre-consulta.port.js';
 import { ConsultaNoEncontradaError } from '../../domain/errors/consulta-no-encontrada.error.js';
 import { ConflictoConcurrenteConsultaError } from '../../domain/errors/conflicto-concurrente-consulta.error.js';
 import { RequisitosCierreConsultaIncumplidosError } from '../../domain/errors/requisitos-cierre-consulta-incumplidos.error.js';
 import { TransicionEstadoConsultaInvalidaError } from '../../domain/errors/transicion-estado-consulta-invalida.error.js';
 import { ServicioFacturableInvalidoError } from '../../domain/errors/servicio-facturable-invalido.error.js';
+import { TransaccionesNoSoportadasError } from '../../domain/errors/transacciones-no-soportadas.error.js';
 import { AutenticacionRequeridaError } from '../errors/autenticacion-requerida.error.js';
 import { ConsultaOdontologica } from '../../domain/entities/consulta-odontologica.entity.js';
 import { HistoriaClinicaId } from '../../domain/value-objects/historia-clinica-id.vo.js';
@@ -19,12 +21,14 @@ import { ExploracionFisica } from '../../domain/value-objects/exploracion-fisica
 import { DiagnosticoItem } from '../../domain/value-objects/diagnostico-item.vo.js';
 import { TipoDiagnostico } from '../../domain/value-objects/tipo-diagnostico.enum.js';
 import { EstadoConsulta } from '../../domain/value-objects/estado-consulta.enum.js';
+import { OutboxEvent } from '../../../outbox/domain/entities/outbox-event.entity.js';
 
 describe('CompletarConsultaUseCase', () => {
   let useCase: CompletarConsultaUseCase;
   let mockRepository: { [K in keyof IConsultaOdontologicaRepositoryPort]: ReturnType<typeof vi.fn> };
   let mockOdontologoContext: { [K in keyof IOdontologoContextPort]: ReturnType<typeof vi.fn> };
   let mockCatalogoServicios: { [K in keyof ICatalogoServiciosPort]: ReturnType<typeof vi.fn> };
+  let mockUnitOfWork: { [K in keyof IUnitOfWorkCierreConsultaPort]: ReturnType<typeof vi.fn> };
 
   const relojCierre = new Date('2026-10-22T11:00:00.000Z');
   const SERVICIO_ACTIVO_ID = '550e8400-e29b-41d4-a716-446655440001';
@@ -98,14 +102,19 @@ describe('CompletarConsultaUseCase', () => {
       }),
     };
 
+    mockUnitOfWork = {
+      ejecutarCierreConOutbox: vi.fn().mockResolvedValue(undefined),
+    };
+
     useCase = new CompletarConsultaUseCase(
       mockRepository as unknown as IConsultaOdontologicaRepositoryPort,
       mockOdontologoContext as unknown as IOdontologoContextPort,
       mockCatalogoServicios as unknown as ICatalogoServiciosPort,
+      mockUnitOfWork as unknown as IUnitOfWorkCierreConsultaPort,
     );
   });
 
-  it('1. debe completar y sellar la consulta sin servicios facturables (consulta sin cobro)', async () => {
+  it('1. debe completar y sellar la consulta sin servicios facturables sin transacción Outbox (consulta sin cobro)', async () => {
     const consulta = crearConsultaConRequisitos();
     mockRepository.buscarPorId.mockResolvedValue(consulta);
 
@@ -122,10 +131,12 @@ describe('CompletarConsultaUseCase', () => {
     expect(result.cerradaEn).toBe(relojCierre.toISOString());
     expect(result.serviciosFacturables).toEqual([]);
     expect(result.totalFacturableBs).toBe('0.00');
-    expect(mockRepository.actualizar).toHaveBeenCalled();
+    // Consulta sin cobro: se actualiza directamente sin Unit of Work
+    expect(mockRepository.actualizar).toHaveBeenCalledWith(consulta, 2);
+    expect(mockUnitOfWork.ejecutarCierreConOutbox).not.toHaveBeenCalled();
   });
 
-  it('2. debe congelar precios oficiales de MS1 al completar con servicios facturables válidos', async () => {
+  it('2. debe delegar al Unit of Work para persistencia atómica con Outbox al completar con servicios facturables', async () => {
     const consulta = crearConsultaConRequisitos();
     mockRepository.buscarPorId.mockResolvedValue(consulta);
 
@@ -159,6 +170,22 @@ describe('CompletarConsultaUseCase', () => {
     });
     expect(result.totalFacturableBs).toBe('300.00');
     expect(result.observacionesCobro).toBe('Factura con NIT');
+
+    // Consulta con cobro: se delega exclusivamente al Unit of Work
+    expect(mockUnitOfWork.ejecutarCierreConOutbox).toHaveBeenCalledTimes(1);
+    const [consultaPasada, versionPasada, eventoPasado] =
+      mockUnitOfWork.ejecutarCierreConOutbox.mock.calls[0] as [ConsultaOdontologica, number, OutboxEvent];
+
+    expect(consultaPasada).toBe(consulta);
+    expect(versionPasada).toBe(2);
+    expect(eventoPasado).toBeInstanceOf(OutboxEvent);
+    expect(eventoPasado.eventType).toBe('clinica.consulta.finalizada');
+    expect(eventoPasado.exchange).toBe('dental.topic.exchange');
+    expect(eventoPasado.routingKey).toBe('clinica.consulta.finalizada');
+    expect(eventoPasado.payload.serviciosRealizados).toBeDefined();
+
+    // No debe llamarse a actualizar por fuera del Unit of Work
+    expect(mockRepository.actualizar).not.toHaveBeenCalled();
   });
 
   it('3. debe rechazar si un servicio facturable no existe en el catálogo de MS1', async () => {
@@ -178,6 +205,8 @@ describe('CompletarConsultaUseCase', () => {
         ],
       }),
     ).rejects.toThrow(ServicioFacturableInvalidoError);
+    expect(mockUnitOfWork.ejecutarCierreConOutbox).not.toHaveBeenCalled();
+    expect(mockRepository.actualizar).not.toHaveBeenCalled();
   });
 
   it('4. debe rechazar si un servicio facturable está inactivo en el catálogo de MS1', async () => {
@@ -197,6 +226,8 @@ describe('CompletarConsultaUseCase', () => {
         ],
       }),
     ).rejects.toThrow(/se encuentra inactivo en MS1/);
+    expect(mockUnitOfWork.ejecutarCierreConOutbox).not.toHaveBeenCalled();
+    expect(mockRepository.actualizar).not.toHaveBeenCalled();
   });
 
   it('5. debe rechazar si no se envía token de autenticación', async () => {
@@ -221,7 +252,7 @@ describe('CompletarConsultaUseCase', () => {
     ).rejects.toThrow(ConsultaNoEncontradaError);
   });
 
-  it('7. debe rechazar por conflicto de concurrencia optimista si la versión esperada no coincide', async () => {
+  it('7. debe rechazar por conflicto de concurrencia optimista si la versión esperada no coincide en memoria', async () => {
     const consulta = crearConsultaConRequisitos();
     mockRepository.buscarPorId.mockResolvedValue(consulta);
 
@@ -266,5 +297,57 @@ describe('CompletarConsultaUseCase', () => {
         versionEsperada: consulta.version,
       }),
     ).rejects.toThrow(TransicionEstadoConsultaInvalidaError);
+  });
+
+  it('10. debe rechazar con TransaccionesNoSoportadasError si la BD es Standalone y no persistir nada', async () => {
+    const consulta = crearConsultaConRequisitos();
+    mockRepository.buscarPorId.mockResolvedValue(consulta);
+    mockUnitOfWork.ejecutarCierreConOutbox.mockRejectedValue(
+      new TransaccionesNoSoportadasError(),
+    );
+
+    await expect(
+      useCase.execute(
+        {
+          tokenAutenticacion: 'token_valido',
+          consultaId: consulta.id.valor,
+          versionEsperada: consulta.version,
+          serviciosFacturables: [
+            {
+              servicioId: SERVICIO_ACTIVO_ID,
+              cantidad: 1,
+            },
+          ],
+        },
+        relojCierre,
+      ),
+    ).rejects.toThrow(TransaccionesNoSoportadasError);
+
+    expect(mockRepository.actualizar).not.toHaveBeenCalled();
+  });
+
+  it('11. debe propagar ConflictoConcurrenteConsultaError si el Unit of Work detecta colisión optimista', async () => {
+    const consulta = crearConsultaConRequisitos();
+    mockRepository.buscarPorId.mockResolvedValue(consulta);
+    mockUnitOfWork.ejecutarCierreConOutbox.mockRejectedValue(
+      new ConflictoConcurrenteConsultaError(consulta.id.valor, consulta.version),
+    );
+
+    await expect(
+      useCase.execute(
+        {
+          tokenAutenticacion: 'token_valido',
+          consultaId: consulta.id.valor,
+          versionEsperada: consulta.version,
+          serviciosFacturables: [
+            {
+              servicioId: SERVICIO_ACTIVO_ID,
+              cantidad: 1,
+            },
+          ],
+        },
+        relojCierre,
+      ),
+    ).rejects.toThrow(ConflictoConcurrenteConsultaError);
   });
 });
