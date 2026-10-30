@@ -8,6 +8,7 @@ import {
 import { MongoConsultaOdontologicaRepository } from './infrastructure/persistence/mongo/repositories/mongo-consulta-odontologica.repository.js';
 import { LocalHistoriaClinicaContextAdapter } from './infrastructure/adapters/local-historia-clinica-context.adapter.js';
 import { MockCitaValidatorAdapter } from './infrastructure/adapters/mock-cita-validator.adapter.js';
+import { HttpMs3CitaValidatorAdapter } from './infrastructure/adapters/http-ms3-cita-validator.adapter.js';
 import { MockOdontologoContextAdapter } from './infrastructure/adapters/mock-odontologo-context.adapter.js';
 import { KeycloakJwtOdontologoContextAdapter } from '../../infrastructure/auth/keycloak-jwt-odontologo-context.adapter.js';
 import { AuthModule } from '../../infrastructure/auth/auth.module.js';
@@ -69,9 +70,31 @@ const USE_CASES = [
       provide: HISTORIA_CLINICA_CONTEXT_PORT,
       useClass: LocalHistoriaClinicaContextAdapter,
     },
+    MockCitaValidatorAdapter,
+    HttpMs3CitaValidatorAdapter,
     {
       provide: CITA_VALIDATOR_PORT,
-      useClass: MockCitaValidatorAdapter,
+      useFactory: (
+        mockAdapter: MockCitaValidatorAdapter,
+        httpAdapter: HttpMs3CitaValidatorAdapter,
+        configService?: ConfigService,
+      ) => {
+        const raw = configService?.get<string>('CITA_VALIDATOR_ADAPTER');
+        const modo =
+          typeof raw === 'string'
+            ? raw.trim().toLowerCase()
+            : (process.env.CITA_VALIDATOR_ADAPTER ?? 'mock').trim().toLowerCase();
+
+        if (modo === 'http') {
+          return httpAdapter;
+        }
+        return mockAdapter;
+      },
+      inject: [
+        MockCitaValidatorAdapter,
+        HttpMs3CitaValidatorAdapter,
+        { token: ConfigService, optional: true },
+      ],
     },
     MockOdontologoContextAdapter,
     KeycloakJwtOdontologoContextAdapter,
@@ -135,6 +158,8 @@ const USE_CASES = [
     UNIT_OF_WORK_CIERRE_CONSULTA_PORT,
     MockCatalogoServiciosAdapter,
     GraphqlMs1CatalogoServiciosAdapter,
+    MockCitaValidatorAdapter,
+    HttpMs3CitaValidatorAdapter,
     ...USE_CASES,
   ],
 })

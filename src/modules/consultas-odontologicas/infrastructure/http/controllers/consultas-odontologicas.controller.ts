@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -46,7 +47,7 @@ import {
 
 @ApiTags('Consultas Odontológicas')
 @ApiBearerAuth('bearer')
-@Controller('consultas-odontologicas')
+@Controller(['consultas-odontologicas', 'consultas'])
 @UseGuards(OdontologoAuthGuard, RolesGuard)
 export class ConsultasOdontologicasController {
   constructor(
@@ -95,6 +96,41 @@ export class ConsultasOdontologicasController {
       evolucionSOAP: dto.evolucionSOAP,
       recomendaciones: dto.recomendaciones,
       fechaAtencion: dto.fechaAtencion ? new Date(dto.fechaAtencion) : undefined,
+    });
+  }
+
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Listar consultas médicas por expediente (vía query param)',
+    description:
+      'Recupera consultas asociadas a una historia clínica pasando historiaClinicaId como query parameter (compatible con contrato OpenAPI /consultas?historiaClinicaId=...).',
+  })
+  @ApiQuery({
+    name: 'historiaClinicaId',
+    required: true,
+    description: 'Identificador canónico de la historia clínica',
+    example: 'hc_12345678-aaaa-bbbb',
+  })
+  @ApiResponse({ status: 200, description: 'Lista paginada de consultas odontológicas.' })
+  @ApiResponse({ status: 400, description: 'historiaClinicaId es obligatorio.' })
+  @ApiResponse({ status: 401, description: 'No autenticado o token no autorizado.' })
+  async listarPorHistoriaClinicaQuery(
+    @Query('historiaClinicaId') historiaClinicaId: string,
+    @Query() query: ListarConsultasQueryHttpDto,
+    @OperadorToken() token: string,
+  ): Promise<ListadoConsultasResponseDto> {
+    const hcId = historiaClinicaId?.trim();
+    if (!hcId) {
+      throw new BadRequestException(
+        'El parámetro query historiaClinicaId es obligatorio para listar consultas.',
+      );
+    }
+    return this.listarConsultasPorHistoriaUseCase.execute({
+      tokenAutenticacion: token,
+      historiaClinicaId: hcId,
+      limite: query.limite,
+      offset: query.offset,
     });
   }
 

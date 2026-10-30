@@ -47,7 +47,7 @@ import {
 
 @ApiTags('Historias Clínicas')
 @ApiBearerAuth('JWT')
-@Controller('historias-clinicas')
+@Controller(['historias-clinicas', 'historias'])
 @UseGuards(OdontologoAuthGuard, RolesGuard)
 export class HistoriasClinicasController {
   constructor(

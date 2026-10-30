@@ -13,14 +13,22 @@ import {
   CATALOGO_SERVICIOS_PORT,
   type ServicioCatalogoDto,
 } from '../../../application/index.js';
+import { BadRequestException } from '@nestjs/common';
 import { MockCatalogoServiciosAdapter } from '../../adapters/mock-catalogo-servicios.adapter.js';
 import { GraphqlMs1CatalogoServiciosAdapter } from '../../adapters/graphql-ms1-catalogo-servicios.adapter.js';
+import { CITA_VALIDATOR_PORT } from '../../../domain/ports/cita-validator.port.js';
+import { MockCitaValidatorAdapter } from '../../adapters/mock-cita-validator.adapter.js';
+import { HttpMs3CitaValidatorAdapter } from '../../adapters/http-ms3-cita-validator.adapter.js';
 
 describe('ConsultasOdontologicasController - Catálogo de Servicios & DI', () => {
   let controller: ConsultasOdontologicasController;
   let useCaseMock: {
     listar: ReturnType<typeof vi.fn>;
     obtenerPorId: ReturnType<typeof vi.fn>;
+  };
+
+  let listarConsultasMock: {
+    execute: ReturnType<typeof vi.fn>;
   };
 
   const mockServicio: ServicioCatalogoDto = {
@@ -38,10 +46,19 @@ describe('ConsultasOdontologicasController - Catálogo de Servicios & DI', () =>
       obtenerPorId: vi.fn().mockResolvedValue(mockServicio),
     };
 
+    listarConsultasMock = {
+      execute: vi.fn().mockResolvedValue({
+        consultas: [],
+        total: 0,
+        limite: 10,
+        offset: 0,
+      }),
+    };
+
     controller = new ConsultasOdontologicasController(
       {} as RegistrarAperturaConsultaUseCase,
       {} as ObtenerConsultaPorIdUseCase,
-      {} as ListarConsultasPorHistoriaUseCase,
+      listarConsultasMock as unknown as ListarConsultasPorHistoriaUseCase,
       {} as ActualizarAtencionConsultaUseCase,
       {} as CompletarConsultaUseCase,
       {} as CancelarConsultaUseCase,
@@ -62,6 +79,40 @@ describe('ConsultasOdontologicasController - Catálogo de Servicios & DI', () =>
 
       expect(useCaseMock.obtenerPorId).toHaveBeenCalledWith(mockServicio.id);
       expect(result).toEqual(mockServicio);
+    });
+  });
+
+  describe('Retrocompatibilidad y Alias de Rutas REST', () => {
+    it('debe registrar los prefijos de ruta "consultas-odontologicas" y "consultas" en el controlador', () => {
+      const pathMetadata = Reflect.getMetadata('path', ConsultasOdontologicasController);
+      expect(pathMetadata).toEqual(['consultas-odontologicas', 'consultas']);
+    });
+
+    it('GET / con historiaClinicaId query param debe delegar al caso de uso de listar', async () => {
+      const result = await controller.listarPorHistoriaClinicaQuery(
+        'hc_test_123',
+        { limite: 20, offset: 5 },
+        'token_operador',
+      );
+
+      expect(listarConsultasMock.execute).toHaveBeenCalledWith({
+        tokenAutenticacion: 'token_operador',
+        historiaClinicaId: 'hc_test_123',
+        limite: 20,
+        offset: 5,
+      });
+      expect(result).toEqual({
+        consultas: [],
+        total: 0,
+        limite: 10,
+        offset: 0,
+      });
+    });
+
+    it('GET / sin historiaClinicaId query param debe lanzar BadRequestException (HTTP 400)', async () => {
+      await expect(
+        controller.listarPorHistoriaClinicaQuery('', {}, 'token_operador'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -169,6 +220,111 @@ describe('ConsultasOdontologicasController - Catálogo de Servicios & DI', () =>
 
       const resolved = moduleRef.get(CATALOGO_SERVICIOS_PORT);
       expect(resolved).toBe(graphqlAdapterInstance);
+    });
+
+    it('5. Resuelve MockCitaValidatorAdapter por defecto cuando CITA_VALIDATOR_ADAPTER no está definido o es mock', async () => {
+      const mockAdapterInstance = new MockCitaValidatorAdapter();
+      const httpAdapterInstance = {} as HttpMs3CitaValidatorAdapter;
+
+      const moduleRef: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: MockCitaValidatorAdapter,
+            useValue: mockAdapterInstance,
+          },
+          {
+            provide: HttpMs3CitaValidatorAdapter,
+            useValue: httpAdapterInstance,
+          },
+          {
+            provide: ConfigService,
+            useValue: {
+              get: vi.fn().mockReturnValue(undefined),
+            },
+          },
+          {
+            provide: CITA_VALIDATOR_PORT,
+            useFactory: (
+              mockAdapter: MockCitaValidatorAdapter,
+              httpAdapter: HttpMs3CitaValidatorAdapter,
+              configService?: ConfigService,
+            ) => {
+              const raw = configService?.get<string>('CITA_VALIDATOR_ADAPTER');
+              const modo =
+                typeof raw === 'string'
+                  ? raw.trim().toLowerCase()
+                  : (process.env.CITA_VALIDATOR_ADAPTER ?? 'mock').trim().toLowerCase();
+
+              if (modo === 'http') {
+                return httpAdapter;
+              }
+              return mockAdapter;
+            },
+            inject: [
+              MockCitaValidatorAdapter,
+              HttpMs3CitaValidatorAdapter,
+              { token: ConfigService, optional: true },
+            ],
+          },
+        ],
+      }).compile();
+
+      const resolved = moduleRef.get(CITA_VALIDATOR_PORT);
+      expect(resolved).toBe(mockAdapterInstance);
+    });
+
+    it('6. Resuelve HttpMs3CitaValidatorAdapter cuando CITA_VALIDATOR_ADAPTER=http', async () => {
+      const mockAdapterInstance = new MockCitaValidatorAdapter();
+      const httpAdapterInstance = {} as HttpMs3CitaValidatorAdapter;
+
+      const moduleRef: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: MockCitaValidatorAdapter,
+            useValue: mockAdapterInstance,
+          },
+          {
+            provide: HttpMs3CitaValidatorAdapter,
+            useValue: httpAdapterInstance,
+          },
+          {
+            provide: ConfigService,
+            useValue: {
+              get: vi.fn().mockImplementation((key: string) => {
+                if (key === 'CITA_VALIDATOR_ADAPTER') return 'http';
+                return undefined;
+              }),
+            },
+          },
+          {
+            provide: CITA_VALIDATOR_PORT,
+            useFactory: (
+              mockAdapter: MockCitaValidatorAdapter,
+              httpAdapter: HttpMs3CitaValidatorAdapter,
+              configService?: ConfigService,
+            ) => {
+              const raw = configService?.get<string>('CITA_VALIDATOR_ADAPTER');
+              const modo =
+                typeof raw === 'string'
+                  ? raw.trim().toLowerCase()
+                  : (process.env.CITA_VALIDATOR_ADAPTER ?? 'mock').trim().toLowerCase();
+
+              if (modo === 'http') {
+                return httpAdapter;
+              }
+              return mockAdapter;
+            },
+            inject: [
+              MockCitaValidatorAdapter,
+              HttpMs3CitaValidatorAdapter,
+              { token: ConfigService, optional: true },
+            ],
+          },
+        ],
+      }).compile();
+
+      const resolved = moduleRef.get(CITA_VALIDATOR_PORT);
+      expect(resolved).toBe(httpAdapterInstance);
     });
   });
 });

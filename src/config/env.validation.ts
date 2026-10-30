@@ -3,9 +3,13 @@ export interface EnvironmentVariables {
   MONGODB_URI: string;
   PACIENTE_VALIDATOR_ADAPTER: 'mock' | 'graphql';
   CATALOGO_SERVICIOS_ADAPTER: 'mock' | 'graphql';
+  CITA_VALIDATOR_ADAPTER: 'mock' | 'http';
   MS1_GRAPHQL_URL: string;
   MS1_TIMEOUT_MS: number;
   MS1_BEARER_TOKEN?: string;
+  MS3_HTTP_URL: string;
+  MS3_TIMEOUT_MS: number;
+  MS3_BEARER_TOKEN?: string;
 
   // Servidor HTTP & Host
   HOST?: string;
@@ -68,6 +72,37 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
       `Variable 'CATALOGO_SERVICIOS_ADAPTER' inválida ('${typeof config.CATALOGO_SERVICIOS_ADAPTER === 'string' ? config.CATALOGO_SERVICIOS_ADAPTER : 'no-string'}'). Valores admitidos: 'mock' | 'graphql'.`,
     );
   }
+
+  const rawCitaAdapter = typeof config.CITA_VALIDATOR_ADAPTER === 'string'
+    ? config.CITA_VALIDATOR_ADAPTER.trim().toLowerCase()
+    : 'mock';
+  const citaAdapter = rawCitaAdapter;
+  if (citaAdapter !== 'mock' && citaAdapter !== 'http') {
+    errors.push(
+      `Variable 'CITA_VALIDATOR_ADAPTER' inválida ('${typeof config.CITA_VALIDATOR_ADAPTER === 'string' ? config.CITA_VALIDATOR_ADAPTER : 'no-string'}'). Valores admitidos: 'mock' | 'http'.`,
+    );
+  }
+
+  const rawMs3Url = typeof config.MS3_HTTP_URL === 'string' && config.MS3_HTTP_URL.trim()
+    ? config.MS3_HTTP_URL.trim()
+    : 'http://127.0.0.1:8000';
+  const ms3HttpUrl = rawMs3Url;
+  if (!ms3HttpUrl.startsWith('http://') && !ms3HttpUrl.startsWith('https://')) {
+    errors.push(
+      `Variable 'MS3_HTTP_URL' inválida ('${ms3HttpUrl}'). Debe comenzar con 'http://' o 'https://'.`,
+    );
+  }
+
+  const rawMs3Timeout = config.MS3_TIMEOUT_MS ?? 2000;
+  const ms3TimeoutMs = Number(rawMs3Timeout);
+  if (isNaN(ms3TimeoutMs) || ms3TimeoutMs <= 0) {
+    errors.push(
+      `Variable 'MS3_TIMEOUT_MS' inválida ('${String(config.MS3_TIMEOUT_MS)}'). Debe ser un número positivo en milisegundos.`,
+    );
+  }
+
+  const rawMs3Token = config.MS3_BEARER_TOKEN;
+  const ms3BearerToken = typeof rawMs3Token === 'string' && rawMs3Token.trim() ? rawMs3Token.trim() : undefined;
 
   const rawGraphqlUrl = typeof config.MS1_GRAPHQL_URL === 'string' && config.MS1_GRAPHQL_URL.trim()
     ? config.MS1_GRAPHQL_URL.trim()
@@ -175,9 +210,13 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
     MONGODB_URI: mongoUri as string,
     PACIENTE_VALIDATOR_ADAPTER: adapter as 'mock' | 'graphql',
     CATALOGO_SERVICIOS_ADAPTER: catalogoAdapter as 'mock' | 'graphql',
+    CITA_VALIDATOR_ADAPTER: citaAdapter as 'mock' | 'http',
     MS1_GRAPHQL_URL: graphqlUrl,
     MS1_TIMEOUT_MS: timeoutMs,
     ...(bearerToken ? { MS1_BEARER_TOKEN: bearerToken } : {}),
+    MS3_HTTP_URL: ms3HttpUrl,
+    MS3_TIMEOUT_MS: ms3TimeoutMs,
+    ...(ms3BearerToken ? { MS3_BEARER_TOKEN: ms3BearerToken } : {}),
     RABBITMQ_URL: rabbitMqUrl,
     RABBITMQ_EXCHANGE: rabbitMqExchange,
     RABBITMQ_ROUTING_KEY: rabbitMqRoutingKey,
