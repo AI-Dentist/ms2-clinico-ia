@@ -21,7 +21,11 @@ import {
   type IOdontologoContextPort,
 } from '../../domain/ports/odontologo-context.port.js';
 import { SolicitudEstudio } from '../../domain/entities/solicitud-estudio.entity.js';
-import { ResultadoEstudio, type ValorReferencia } from '../../domain/entities/resultado-estudio.entity.js';
+import {
+  ResultadoEstudio,
+  type ValorReferencia,
+  type ArchivoAdjuntoEstudio,
+} from '../../domain/entities/resultado-estudio.entity.js';
 import {
   SolicitudEstudioNoEncontradaError,
   TipoEstudioNoEncontradoError,
@@ -53,6 +57,7 @@ export interface RegistrarResultadoEstudioCommand {
   resumen: string;
   observaciones?: string | null;
   valoresReferencia?: ValorReferencia[] | null;
+  archivoAdjunto?: ArchivoAdjuntoEstudio | null;
   tokenOdontologo: string;
 }
 
@@ -300,6 +305,7 @@ export class RegistrarResultadoEstudioUseCase {
       resumen: cmd.resumen,
       observaciones: cmd.observaciones,
       valoresReferencia: cmd.valoresReferencia,
+      archivoAdjunto: cmd.archivoAdjunto,
     });
 
     try {
@@ -310,6 +316,54 @@ export class RegistrarResultadoEstudioUseCase {
 
     const guardada = await this.solicitudRepo.guardar(sol);
     const tipo = await this.tipoEstudioRepo.buscarPorId(guardada.tipoEstudioId);
+    return EstudiosMapper.solicitudToDto(guardada, tipo, labNombre);
+  }
+}
+
+@Injectable()
+export class AdjuntarArchivoEstudioUseCase {
+  constructor(
+    @Inject(SOLICITUD_ESTUDIO_REPOSITORY)
+    private readonly solicitudRepo: ISolicitudEstudioRepositoryPort,
+    @Inject(TIPO_ESTUDIO_REPOSITORY)
+    private readonly tipoEstudioRepo: ITipoEstudioRepositoryPort,
+    @Inject(LABORATORIO_REPOSITORY)
+    private readonly labRepo: ILaboratorioRepositoryPort,
+    @Inject(ODONTOLOGO_CONTEXT_PORT)
+    private readonly odontologoContext: IOdontologoContextPort,
+  ) {}
+
+  async execute(params: {
+    solicitudId: string;
+    archivoAdjunto: ArchivoAdjuntoEstudio;
+    tokenOdontologo: string;
+  }): Promise<SolicitudEstudioDto> {
+    const sol = await this.solicitudRepo.buscarPorId(params.solicitudId.trim());
+    if (!sol) {
+      throw new SolicitudEstudioNoEncontradaError(params.solicitudId);
+    }
+
+    const odCtx = await this.odontologoContext.obtenerOdontologoActual(params.tokenOdontologo);
+
+    if (sol.estado === EstadoSolicitudEstudio.CANCELADO) {
+      throw new TransicionSolicitudInvalidaError(
+        'No es posible adjuntar archivos a una solicitud de estudio que se encuentra cancelada.',
+      );
+    }
+
+    try {
+      sol.adjuntarArchivo(params.archivoAdjunto, odCtx.odontologoId);
+    } catch (err: any) {
+      throw new TransicionSolicitudInvalidaError(err.message);
+    }
+
+    const guardada = await this.solicitudRepo.guardar(sol);
+    const tipo = await this.tipoEstudioRepo.buscarPorId(guardada.tipoEstudioId);
+    let labNombre: string | null = null;
+    if (guardada.resultado?.laboratorioId) {
+      const lab = await this.labRepo.buscarPorId(guardada.resultado.laboratorioId);
+      labNombre = lab ? lab.nombre : null;
+    }
     return EstudiosMapper.solicitudToDto(guardada, tipo, labNombre);
   }
 }

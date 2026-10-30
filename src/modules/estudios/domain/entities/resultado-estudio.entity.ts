@@ -5,6 +5,13 @@ export interface ValorReferencia {
   estado?: string;
 }
 
+export interface ArchivoAdjuntoEstudio {
+  urlArchivo: string;
+  nombreArchivo: string;
+  mimeType: string;
+  tamanioBytes: number;
+}
+
 export interface ResultadoEstudioProps {
   id: string;
   solicitudEstudioId: string;
@@ -14,6 +21,7 @@ export interface ResultadoEstudioProps {
   resumen: string;
   observaciones?: string | null;
   valoresReferencia?: ValorReferencia[] | null;
+  archivoAdjunto?: ArchivoAdjuntoEstudio | null;
   registradoEn: Date;
 }
 
@@ -26,6 +34,7 @@ export class ResultadoEstudio {
   private _resumen: string;
   private _observaciones: string | null;
   private _valoresReferencia: ValorReferencia[];
+  private _archivoAdjunto: ArchivoAdjuntoEstudio | null;
   private _registradoEn: Date;
 
   constructor(props: ResultadoEstudioProps) {
@@ -38,6 +47,7 @@ export class ResultadoEstudio {
     this._resumen = props.resumen.trim();
     this._observaciones = props.observaciones ? props.observaciones.trim() : null;
     this._valoresReferencia = props.valoresReferencia ?? [];
+    this._archivoAdjunto = props.archivoAdjunto ?? null;
     this._registradoEn = props.registradoEn ?? new Date();
   }
 
@@ -50,6 +60,7 @@ export class ResultadoEstudio {
     resumen: string;
     observaciones?: string | null;
     valoresReferencia?: ValorReferencia[] | null;
+    archivoAdjunto?: ArchivoAdjuntoEstudio | null;
   }): ResultadoEstudio {
     return new ResultadoEstudio({
       id: props.id,
@@ -60,6 +71,7 @@ export class ResultadoEstudio {
       resumen: props.resumen,
       observaciones: props.observaciones,
       valoresReferencia: props.valoresReferencia,
+      archivoAdjunto: props.archivoAdjunto,
       registradoEn: new Date(),
     });
   }
@@ -98,6 +110,10 @@ export class ResultadoEstudio {
 
   get valoresReferencia(): ReadonlyArray<ValorReferencia> {
     return this._valoresReferencia;
+  }
+
+  get archivoAdjunto(): ArchivoAdjuntoEstudio | null {
+    return this._archivoAdjunto;
   }
 
   get registradoEn(): Date {

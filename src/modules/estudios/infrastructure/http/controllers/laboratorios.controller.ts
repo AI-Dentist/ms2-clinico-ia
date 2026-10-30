@@ -24,11 +24,13 @@ import {
   CambiarEstadoLaboratorioHttpDto,
 } from '../dtos/laboratorio.http-dto.js';
 import { OdontologoAuthGuard } from '../guards/odontologo-auth.guard.js';
+import { RolesGuard } from '../../../../../infrastructure/auth/roles.guard.js';
+import { Roles } from '../../../../../infrastructure/auth/roles.decorator.js';
 import type { LaboratorioDto } from '../../../application/dtos/estudios.dtos.js';
 import { EstadoCatalogo } from '../../../domain/enums/estado-catalogo.enum.js';
 
 @Controller('laboratorios')
-@UseGuards(OdontologoAuthGuard)
+@UseGuards(OdontologoAuthGuard, RolesGuard)
 export class LaboratoriosController {
   constructor(
     private readonly crearUseCase: CrearLaboratorioUseCase,
@@ -39,6 +41,7 @@ export class LaboratoriosController {
   ) {}
 
   @Post()
+  @Roles('ODONTOLOGO', 'ADMIN')
   @HttpCode(HttpStatus.CREATED)
   async crear(@Body() dto: CrearLaboratorioHttpDto): Promise<LaboratorioDto> {
     return this.crearUseCase.execute({
@@ -60,6 +63,7 @@ export class LaboratoriosController {
   }
 
   @Put(':id')
+  @Roles('ODONTOLOGO', 'ADMIN')
   async actualizar(
     @Param('id') id: string,
     @Body() dto: ActualizarLaboratorioHttpDto
@@ -72,6 +76,7 @@ export class LaboratoriosController {
   }
 
   @Patch(':id/estado')
+  @Roles('ODONTOLOGO', 'ADMIN')
   async cambiarEstado(
     @Param('id') id: string,
     @Body() dto: CambiarEstadoLaboratorioHttpDto

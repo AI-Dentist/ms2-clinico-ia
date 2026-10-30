@@ -21,6 +21,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { OdontologoAuthGuard } from '../guards/odontologo-auth.guard.js';
+import { RolesGuard } from '../../../../../infrastructure/auth/roles.guard.js';
+import { Roles } from '../../../../../infrastructure/auth/roles.decorator.js';
 import { ProblemDetailsFilter } from '../../../../historias-clinicas/infrastructure/http/filters/problem-details.filter.js';
 import { OperadorToken } from '../decorators/operador-token.decorator.js';
 import {
@@ -42,7 +44,7 @@ import {
 
 @ApiTags('Odontogramas')
 @ApiBearerAuth('bearer')
-@UseGuards(OdontologoAuthGuard)
+@UseGuards(OdontologoAuthGuard, RolesGuard)
 @UseFilters(ProblemDetailsFilter)
 @Controller('odontogramas')
 export class OdontogramasController {
@@ -83,6 +85,7 @@ export class OdontogramasController {
   }
 
   @Post('inicializar')
+  @Roles('ODONTOLOGO', 'ADMIN')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Inicializar odontograma longitudinal',
@@ -207,6 +210,7 @@ export class OdontogramasController {
   }
 
   @Post(':id/revisiones')
+  @Roles('ODONTOLOGO', 'ADMIN')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Registrar nueva revisión o enmienda correctiva',

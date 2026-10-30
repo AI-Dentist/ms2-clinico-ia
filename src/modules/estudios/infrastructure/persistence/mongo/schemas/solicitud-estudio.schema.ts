@@ -23,6 +23,23 @@ export class ValorReferenciaMongo {
 export const ValorReferenciaSchema = SchemaFactory.createForClass(ValorReferenciaMongo);
 
 @Schema({ _id: false, versionKey: false })
+export class ArchivoAdjuntoMongo {
+  @Prop({ type: String, required: true })
+  urlArchivo: string;
+
+  @Prop({ type: String, required: true })
+  nombreArchivo: string;
+
+  @Prop({ type: String, required: true })
+  mimeType: string;
+
+  @Prop({ type: Number, required: true })
+  tamanioBytes: number;
+}
+
+export const ArchivoAdjuntoSchema = SchemaFactory.createForClass(ArchivoAdjuntoMongo);
+
+@Schema({ _id: false, versionKey: false })
 export class ResultadoEstudioMongo {
   @Prop({ type: String, required: true })
   _id: string;
@@ -44,6 +61,9 @@ export class ResultadoEstudioMongo {
 
   @Prop({ type: [ValorReferenciaSchema], default: [] })
   valoresReferencia: ValorReferenciaMongo[];
+
+  @Prop({ type: ArchivoAdjuntoSchema, default: null })
+  archivoAdjunto: ArchivoAdjuntoMongo | null;
 
   @Prop({ type: Date, required: true, default: Date.now })
   registradoEn: Date;

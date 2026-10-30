@@ -3,6 +3,9 @@
  */
 export interface OdontologoContexto {
   odontologoId: string;
+  roles?: string[];
+  email?: string;
+  nombre?: string;
 }
 
 /**

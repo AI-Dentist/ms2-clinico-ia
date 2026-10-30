@@ -7,6 +7,17 @@ export interface EnvironmentVariables {
   MS1_TIMEOUT_MS: number;
   MS1_BEARER_TOKEN?: string;
 
+  // Servidor HTTP & Host
+  HOST?: string;
+  CORS_ORIGINS?: string;
+
+  // Autenticación Keycloak & JWT (Pilar Seguridad)
+  KEYCLOAK_URL?: string;
+  KEYCLOAK_REALM?: string;
+  KEYCLOAK_PUBLIC_KEY?: string;
+  JWT_SECRET?: string;
+  ODONTOLOGO_AUTH_ADAPTER?: 'mock' | 'keycloak';
+
   // RabbitMQ & Outbox Relay (Iteración 4)
   RABBITMQ_URL: string;
   RABBITMQ_EXCHANGE: string;
@@ -142,8 +153,25 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
     throw new Error(`[ConfigValidationError] Configuración inválida:\n- ${errors.join('\n- ')}`);
   }
 
+  const host = typeof config.HOST === 'string' && config.HOST.trim() ? config.HOST.trim() : '0.0.0.0';
+  const keycloakUrl = typeof config.KEYCLOAK_URL === 'string' && config.KEYCLOAK_URL.trim() ? config.KEYCLOAK_URL.trim() : 'http://localhost:8080';
+  const keycloakRealm = typeof config.KEYCLOAK_REALM === 'string' && config.KEYCLOAK_REALM.trim() ? config.KEYCLOAK_REALM.trim() : 'dental-platform';
+  const keycloakPublicKey = typeof config.KEYCLOAK_PUBLIC_KEY === 'string' && config.KEYCLOAK_PUBLIC_KEY.trim() ? config.KEYCLOAK_PUBLIC_KEY.trim() : undefined;
+  const jwtSecret = typeof config.JWT_SECRET === 'string' && config.JWT_SECRET.trim() ? config.JWT_SECRET.trim() : undefined;
+  const rawAuthAdapter = typeof config.ODONTOLOGO_AUTH_ADAPTER === 'string' ? config.ODONTOLOGO_AUTH_ADAPTER.trim().toLowerCase() : 'keycloak';
+  const odontologoAuthAdapter = rawAuthAdapter === 'mock' ? 'mock' : 'keycloak';
+
+  const corsOrigins = typeof config.CORS_ORIGINS === 'string' && config.CORS_ORIGINS.trim() ? config.CORS_ORIGINS.trim() : undefined;
+
   return {
     PORT: port,
+    HOST: host,
+    ...(corsOrigins ? { CORS_ORIGINS: corsOrigins } : {}),
+    KEYCLOAK_URL: keycloakUrl,
+    KEYCLOAK_REALM: keycloakRealm,
+    ...(keycloakPublicKey ? { KEYCLOAK_PUBLIC_KEY: keycloakPublicKey } : {}),
+    ...(jwtSecret ? { JWT_SECRET: jwtSecret } : {}),
+    ODONTOLOGO_AUTH_ADAPTER: odontologoAuthAdapter,
     MONGODB_URI: mongoUri as string,
     PACIENTE_VALIDATOR_ADAPTER: adapter as 'mock' | 'graphql',
     CATALOGO_SERVICIOS_ADAPTER: catalogoAdapter as 'mock' | 'graphql',

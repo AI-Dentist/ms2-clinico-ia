@@ -9,6 +9,8 @@ import { MongoConsultaOdontologicaRepository } from './infrastructure/persistenc
 import { LocalHistoriaClinicaContextAdapter } from './infrastructure/adapters/local-historia-clinica-context.adapter.js';
 import { MockCitaValidatorAdapter } from './infrastructure/adapters/mock-cita-validator.adapter.js';
 import { MockOdontologoContextAdapter } from './infrastructure/adapters/mock-odontologo-context.adapter.js';
+import { KeycloakJwtOdontologoContextAdapter } from '../../infrastructure/auth/keycloak-jwt-odontologo-context.adapter.js';
+import { AuthModule } from '../../infrastructure/auth/auth.module.js';
 import { MockCatalogoServiciosAdapter } from './infrastructure/adapters/mock-catalogo-servicios.adapter.js';
 import { GraphqlMs1CatalogoServiciosAdapter } from './infrastructure/adapters/graphql-ms1-catalogo-servicios.adapter.js';
 import { HistoriasClinicasModule } from '../historias-clinicas/historias-clinicas.module.js';
@@ -49,6 +51,7 @@ const USE_CASES = [
 @Module({
   imports: [
     ConfigModule,
+    AuthModule,
     MongooseModule.forFeature([
       { name: ConsultaOdontologicaDocument.name, schema: ConsultaOdontologicaSchema },
     ]),
@@ -70,9 +73,29 @@ const USE_CASES = [
       provide: CITA_VALIDATOR_PORT,
       useClass: MockCitaValidatorAdapter,
     },
+    MockOdontologoContextAdapter,
+    KeycloakJwtOdontologoContextAdapter,
     {
       provide: ODONTOLOGO_CONTEXT_PORT,
-      useClass: MockOdontologoContextAdapter,
+      useFactory: (
+        keycloakAdapter: KeycloakJwtOdontologoContextAdapter,
+        mockAdapter: MockOdontologoContextAdapter,
+        configService?: ConfigService,
+      ) => {
+        const mode =
+          configService?.get<string>('ODONTOLOGO_AUTH_ADAPTER') ??
+          process.env.ODONTOLOGO_AUTH_ADAPTER ??
+          'keycloak';
+        if (mode === 'mock') {
+          return mockAdapter;
+        }
+        return keycloakAdapter;
+      },
+      inject: [
+        KeycloakJwtOdontologoContextAdapter,
+        MockOdontologoContextAdapter,
+        { token: ConfigService, optional: true },
+      ],
     },
     MockCatalogoServiciosAdapter,
     GraphqlMs1CatalogoServiciosAdapter,

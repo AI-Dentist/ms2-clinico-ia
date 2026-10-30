@@ -25,8 +25,12 @@ import { MongoSolicitudEstudioRepository } from './infrastructure/persistence/mo
 
 import { LocalConsultaContextAdapter } from './infrastructure/adapters/local-consulta-context.adapter.js';
 import { MockOdontologoContextAdapter } from './infrastructure/adapters/mock-odontologo-context.adapter.js';
+import { KeycloakJwtOdontologoContextAdapter } from '../../infrastructure/auth/keycloak-jwt-odontologo-context.adapter.js';
+import { AuthModule } from '../../infrastructure/auth/auth.module.js';
+import { IaDiagnosticoModule } from '../ia-diagnostico/ia-diagnostico.module.js';
 
 import { ConsultasOdontologicasModule } from '../consultas-odontologicas/consultas-odontologicas.module.js';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import {
   CrearLaboratorioUseCase,
@@ -51,6 +55,7 @@ import {
   ObtenerSolicitudEstudioPorIdUseCase,
   CambiarEstadoSolicitudUseCase,
   RegistrarResultadoEstudioUseCase,
+  AdjuntarArchivoEstudioUseCase,
 } from './application/use-cases/solicitudes-estudio.use-cases.js';
 
 import { LaboratoriosController } from './infrastructure/http/controllers/laboratorios.controller.js';
@@ -75,10 +80,14 @@ const USE_CASES = [
   ObtenerSolicitudEstudioPorIdUseCase,
   CambiarEstadoSolicitudUseCase,
   RegistrarResultadoEstudioUseCase,
+  AdjuntarArchivoEstudioUseCase,
 ];
 
 @Module({
   imports: [
+    ConfigModule,
+    AuthModule,
+    IaDiagnosticoModule,
     MongooseModule.forFeature([
       { name: LaboratorioMongo.name, schema: LaboratorioSchema },
       { name: TipoEstudioMongo.name, schema: TipoEstudioSchema },
@@ -109,9 +118,29 @@ const USE_CASES = [
       provide: CONSULTA_CONTEXT_PORT,
       useClass: LocalConsultaContextAdapter,
     },
+    MockOdontologoContextAdapter,
+    KeycloakJwtOdontologoContextAdapter,
     {
       provide: ODONTOLOGO_CONTEXT_PORT,
-      useClass: MockOdontologoContextAdapter,
+      useFactory: (
+        keycloakAdapter: KeycloakJwtOdontologoContextAdapter,
+        mockAdapter: MockOdontologoContextAdapter,
+        configService?: ConfigService,
+      ) => {
+        const mode =
+          configService?.get<string>('ODONTOLOGO_AUTH_ADAPTER') ??
+          process.env.ODONTOLOGO_AUTH_ADAPTER ??
+          'keycloak';
+        if (mode === 'mock') {
+          return mockAdapter;
+        }
+        return keycloakAdapter;
+      },
+      inject: [
+        KeycloakJwtOdontologoContextAdapter,
+        MockOdontologoContextAdapter,
+        { token: ConfigService, optional: true },
+      ],
     },
     ...USE_CASES,
   ],

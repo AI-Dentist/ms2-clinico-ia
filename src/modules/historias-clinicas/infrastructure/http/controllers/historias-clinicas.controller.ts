@@ -11,6 +11,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -19,7 +20,9 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { OdontologoAuthGuard } from '../guards/odontologo-auth.guard.js';
+import { OdontologoAuthGuard, type RequestConOperador } from '../guards/odontologo-auth.guard.js';
+import { RolesGuard } from '../../../../../infrastructure/auth/roles.guard.js';
+import { Roles } from '../../../../../infrastructure/auth/roles.decorator.js';
 import { OperadorToken } from '../decorators/operador-token.decorator.js';
 import { CrearHistoriaClinicaHttpDto } from '../dtos/crear-historia-clinica.http-dto.js';
 import { ActualizarAntecedentesHttpDto } from '../dtos/actualizar-antecedentes.http-dto.js';
@@ -45,7 +48,7 @@ import {
 @ApiTags('Historias Clínicas')
 @ApiBearerAuth('JWT')
 @Controller('historias-clinicas')
-@UseGuards(OdontologoAuthGuard)
+@UseGuards(OdontologoAuthGuard, RolesGuard)
 export class HistoriasClinicasController {
   constructor(
     private readonly crearHistoriaClinicaUseCase: CrearHistoriaClinicaUseCase,
@@ -59,21 +62,39 @@ export class HistoriasClinicasController {
   ) {}
 
   @Post()
+  @Roles('ODONTOLOGO', 'ADMIN')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Crear apertura de expediente clínico odontológico' })
   @ApiResponse({ status: 201, description: 'Expediente clínico abierto exitosamente' })
   @ApiResponse({ status: 400, description: 'Datos de solicitud inválidos' })
   @ApiResponse({ status: 401, description: 'No autorizado / Token ausente o inválido' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado: rol clínico insuficiente' })
   @ApiResponse({ status: 409, description: 'El paciente ya cuenta con un expediente clínico' })
   @ApiResponse({ status: 422, description: 'Paciente inexistente en MS1 o datos clínicos inválidos' })
   async crear(
     @OperadorToken() token: string,
     @Body() dto: CrearHistoriaClinicaHttpDto,
+    @Req() req?: RequestConOperador,
   ): Promise<HistoriaClinicaResponseDto> {
+    const operadorAutenticadoId = req?.odontologoActual?.odontologoId;
+    let odontologoResponsableId = dto.odontologoResponsableId;
+
+    if (operadorAutenticadoId) {
+      if (
+        dto.odontologoResponsableId &&
+        dto.odontologoResponsableId !== operadorAutenticadoId
+      ) {
+        throw new BadRequestException(
+          `El odontólogo responsable (${dto.odontologoResponsableId}) debe coincidir con el operador autenticado (${operadorAutenticadoId}).`,
+        );
+      }
+      odontologoResponsableId = operadorAutenticadoId;
+    }
+
     return this.crearHistoriaClinicaUseCase.execute({
       tokenAutenticacion: token,
       pacienteId: dto.pacienteId,
-      odontologoResponsableId: dto.odontologoResponsableId,
+      odontologoResponsableId,
       antecedentes: dto.antecedentes,
       observacionesGenerales: dto.observacionesGenerales,
     });
@@ -113,10 +134,12 @@ export class HistoriasClinicasController {
   }
 
   @Patch(':id/antecedentes')
+  @Roles('ODONTOLOGO', 'ADMIN')
   @ApiOperation({ summary: 'Actualizar antecedentes personales, médicos u odontológicos' })
   @ApiResponse({ status: 200, description: 'Antecedentes actualizados exitosamente' })
   @ApiResponse({ status: 400, description: 'Estructura o versión inválida' })
   @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado: rol clínico insuficiente' })
   @ApiResponse({ status: 404, description: 'Historia clínica no encontrada' })
   @ApiResponse({ status: 409, description: 'Conflicto de concurrencia optimista (versionEsperada desactualizada)' })
   @ApiResponse({ status: 422, description: 'Expediente no editable o regla clínica incumplida' })
@@ -136,11 +159,13 @@ export class HistoriasClinicasController {
   }
 
   @Post(':id/alergias')
+  @Roles('ODONTOLOGO', 'ADMIN')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Registrar nueva alergia en el expediente' })
   @ApiResponse({ status: 201, description: 'Alergia registrada exitosamente' })
   @ApiResponse({ status: 400, description: 'Datos de alergia inválidos' })
   @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado: rol clínico insuficiente' })
   @ApiResponse({ status: 404, description: 'Historia clínica no encontrada' })
   @ApiResponse({ status: 409, description: 'Conflicto de concurrencia optimista' })
   @ApiResponse({ status: 422, description: 'Alergia duplicada o expediente no editable' })
@@ -164,10 +189,12 @@ export class HistoriasClinicasController {
   }
 
   @Delete(':id/alergias/:sustancia')
+  @Roles('ODONTOLOGO', 'ADMIN')
   @ApiOperation({ summary: 'Eliminar alergia por sustancia (case-insensitive)' })
   @ApiResponse({ status: 200, description: 'Alergia eliminada exitosamente' })
   @ApiResponse({ status: 400, description: 'Parámetros inválidos' })
   @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado: rol clínico insuficiente' })
   @ApiResponse({ status: 404, description: 'Historia clínica o sustancia no encontrada' })
   @ApiResponse({ status: 409, description: 'Conflicto de concurrencia optimista' })
   @ApiResponse({ status: 422, description: 'Expediente no editable' })
@@ -187,10 +214,12 @@ export class HistoriasClinicasController {
   }
 
   @Put(':id/medicamentos')
+  @Roles('ODONTOLOGO', 'ADMIN')
   @ApiOperation({ summary: 'Reemplazar listado de medicamentos actuales' })
   @ApiResponse({ status: 200, description: 'Medicamentos actualizados exitosamente' })
   @ApiResponse({ status: 400, description: 'Datos de fármacos inválidos' })
   @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado: rol clínico insuficiente' })
   @ApiResponse({ status: 404, description: 'Historia clínica no encontrada' })
   @ApiResponse({ status: 409, description: 'Conflicto de concurrencia optimista' })
   @ApiResponse({ status: 422, description: 'Expediente no editable' })
@@ -209,10 +238,12 @@ export class HistoriasClinicasController {
   }
 
   @Patch(':id/estado')
+  @Roles('ODONTOLOGO', 'ADMIN')
   @ApiOperation({ summary: 'Cambiar estado del expediente clínico (máquina de estados)' })
   @ApiResponse({ status: 200, description: 'Estado actualizado exitosamente' })
   @ApiResponse({ status: 400, description: 'Estado destino inválido' })
   @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado: rol clínico insuficiente' })
   @ApiResponse({ status: 404, description: 'Historia clínica no encontrada' })
   @ApiResponse({ status: 409, description: 'Conflicto de concurrencia optimista' })
   @ApiResponse({ status: 422, description: 'Transición de estado no permitida' })

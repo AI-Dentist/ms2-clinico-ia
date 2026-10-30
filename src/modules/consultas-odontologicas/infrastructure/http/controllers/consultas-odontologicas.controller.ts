@@ -19,6 +19,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { OdontologoAuthGuard } from '../guards/odontologo-auth.guard.js';
+import { RolesGuard } from '../../../../../infrastructure/auth/roles.guard.js';
+import { Roles } from '../../../../../infrastructure/auth/roles.decorator.js';
 import { OperadorToken } from '../decorators/operador-token.decorator.js';
 import {
   AbrirConsultaHttpDto,
@@ -45,7 +47,7 @@ import {
 @ApiTags('Consultas Odontológicas')
 @ApiBearerAuth('bearer')
 @Controller('consultas-odontologicas')
-@UseGuards(OdontologoAuthGuard)
+@UseGuards(OdontologoAuthGuard, RolesGuard)
 export class ConsultasOdontologicasController {
   constructor(
     private readonly registrarAperturaConsultaUseCase: RegistrarAperturaConsultaUseCase,
@@ -58,6 +60,7 @@ export class ConsultasOdontologicasController {
   ) {}
 
   @Post()
+  @Roles('ODONTOLOGO', 'ADMIN')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Registrar la apertura de una nueva consulta odontológica',
@@ -196,6 +199,7 @@ export class ConsultasOdontologicasController {
   }
 
   @Put(':id/atencion')
+  @Roles('ODONTOLOGO', 'ADMIN')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Actualizar datos clínicos de la atención en sillón',
@@ -210,6 +214,7 @@ export class ConsultasOdontologicasController {
   @ApiResponse({ status: 200, description: 'Consulta odontológica actualizada exitosamente.' })
   @ApiResponse({ status: 400, description: 'Cuerpo de solicitud inválido o propiedades no permitidas.' })
   @ApiResponse({ status: 401, description: 'No autenticado.' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado: rol clínico insuficiente' })
   @ApiResponse({ status: 404, description: 'Consulta no encontrada.' })
   @ApiResponse({ status: 409, description: 'Conflicto de concurrencia optimista (versión esperada obsoleta).' })
   @ApiResponse({ status: 422, description: 'Consulta cerrada/cancelada o datos clínicos no válidos.' })
@@ -233,6 +238,7 @@ export class ConsultasOdontologicasController {
   }
 
   @Post(':id/completar')
+  @Roles('ODONTOLOGO', 'ADMIN')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Completar y sellar formalmente la consulta odontológica',
@@ -247,6 +253,7 @@ export class ConsultasOdontologicasController {
   @ApiResponse({ status: 200, description: 'Consulta completada y sellada exitosamente.' })
   @ApiResponse({ status: 400, description: 'Cuerpo inválido.' })
   @ApiResponse({ status: 401, description: 'No autenticado.' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado: rol clínico insuficiente' })
   @ApiResponse({ status: 404, description: 'Consulta no encontrada.' })
   @ApiResponse({ status: 409, description: 'Conflicto de concurrencia optimista.' })
   @ApiResponse({ status: 422, description: 'Requisitos clínicos de cierre incumplidos o estado no editable.' })
@@ -269,6 +276,7 @@ export class ConsultasOdontologicasController {
   }
 
   @Post(':id/cancelar')
+  @Roles('ODONTOLOGO', 'ADMIN')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Cancelar una consulta odontológica en curso',
@@ -283,6 +291,7 @@ export class ConsultasOdontologicasController {
   @ApiResponse({ status: 200, description: 'Consulta cancelada exitosamente.' })
   @ApiResponse({ status: 400, description: 'Cuerpo inválido o justificación ausente.' })
   @ApiResponse({ status: 401, description: 'No autenticado.' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado: rol clínico insuficiente' })
   @ApiResponse({ status: 404, description: 'Consulta no encontrada.' })
   @ApiResponse({ status: 409, description: 'Conflicto de concurrencia optimista.' })
   @ApiResponse({ status: 422, description: 'Consulta ya cerrada o cancelada previamente.' })

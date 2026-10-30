@@ -1,6 +1,8 @@
-/** Datos del odontólogo identificado en el contexto de la request. */
 export interface OdontologoContexto {
   odontologoId: string;
+  roles?: string[];
+  email?: string;
+  nombre?: string;
 }
 
 /**

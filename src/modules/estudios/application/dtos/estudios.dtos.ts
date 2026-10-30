@@ -31,6 +31,13 @@ export interface ValorReferenciaDto {
   estado?: string;
 }
 
+export interface ArchivoAdjuntoDto {
+  urlArchivo: string;
+  nombreArchivo: string;
+  mimeType: string;
+  tamanioBytes: number;
+}
+
 export interface ResultadoEstudioDto {
   id: string;
   solicitudEstudioId: string;
@@ -41,6 +48,7 @@ export interface ResultadoEstudioDto {
   resumen: string;
   observaciones: string | null;
   valoresReferencia?: ValorReferenciaDto[];
+  archivoAdjunto?: ArchivoAdjuntoDto | null;
   registradoEn: string;
 }
 

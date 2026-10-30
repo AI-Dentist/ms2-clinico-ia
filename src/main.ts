@@ -39,9 +39,43 @@ async function bootstrap() {
   SwaggerModule.setup('api/expediente/docs', app, document);
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT', 3001);
+  const corsOriginsRaw =
+    configService.get<string>('CORS_ORIGINS') || configService.get<string>('CORS_ORIGIN');
+  const configuredOrigins = corsOriginsRaw
+    ? corsOriginsRaw.split(',').map((o) => o.trim()).filter(Boolean)
+    : [];
+  const defaultOrigins = [
+    'http://localhost:4200',
+    'http://localhost:4201',
+    'http://localhost:8080',
+    'http://localhost',
+    'http://127.0.0.1:4200',
+    'http://127.0.0.1:4201',
+    'http://127.0.0.1:8080',
+    'http://127.0.0.1',
+  ];
+  const allowedOrigins = Array.from(new Set([...defaultOrigins, ...configuredOrigins]));
 
-  await app.listen(port, '127.0.0.1');
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'X-Requested-With',
+      'Origin',
+      'Idempotency-Key',
+      'X-Correlation-ID',
+      'X-Idempotency-Key',
+    ],
+  });
+
+  const port = configService.get<number>('PORT', 3001);
+  const host = configService.get<string>('HOST', '0.0.0.0');
+
+  await app.listen(port, host);
 }
 
 void bootstrap();

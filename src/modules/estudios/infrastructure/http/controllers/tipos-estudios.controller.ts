@@ -24,12 +24,14 @@ import {
   CambiarEstadoTipoEstudioHttpDto,
 } from '../dtos/tipo-estudio.http-dto.js';
 import { OdontologoAuthGuard } from '../guards/odontologo-auth.guard.js';
+import { RolesGuard } from '../../../../../infrastructure/auth/roles.guard.js';
+import { Roles } from '../../../../../infrastructure/auth/roles.decorator.js';
 import type { TipoEstudioDto } from '../../../application/dtos/estudios.dtos.js';
 import { CategoriaEstudio } from '../../../domain/enums/categoria-estudio.enum.js';
 import { EstadoCatalogo } from '../../../domain/enums/estado-catalogo.enum.js';
 
 @Controller('tipos-estudios')
-@UseGuards(OdontologoAuthGuard)
+@UseGuards(OdontologoAuthGuard, RolesGuard)
 export class TiposEstudiosController {
   constructor(
     private readonly crearUseCase: CrearTipoEstudioUseCase,
@@ -40,6 +42,7 @@ export class TiposEstudiosController {
   ) {}
 
   @Post()
+  @Roles('ODONTOLOGO', 'ADMIN')
   @HttpCode(HttpStatus.CREATED)
   async crear(@Body() dto: CrearTipoEstudioHttpDto): Promise<TipoEstudioDto> {
     return this.crearUseCase.execute({
@@ -68,6 +71,7 @@ export class TiposEstudiosController {
   }
 
   @Put(':id')
+  @Roles('ODONTOLOGO', 'ADMIN')
   async actualizar(
     @Param('id') id: string,
     @Body() dto: ActualizarTipoEstudioHttpDto
@@ -80,6 +84,7 @@ export class TiposEstudiosController {
   }
 
   @Patch(':id/estado')
+  @Roles('ODONTOLOGO', 'ADMIN')
   async cambiarEstado(
     @Param('id') id: string,
     @Body() dto: CambiarEstadoTipoEstudioHttpDto

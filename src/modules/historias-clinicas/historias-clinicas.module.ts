@@ -11,6 +11,8 @@ import { GraphqlMs1PacienteValidatorAdapter } from './infrastructure/adapters/gr
 import { MS1_CREDENTIALS_PROVIDER } from './infrastructure/adapters/ms1-credentials-provider.port.js';
 import { EnvMs1CredentialsProvider } from './infrastructure/adapters/env-ms1-credentials-provider.adapter.js';
 import { MockOdontologoContextAdapter } from './infrastructure/adapters/mock-odontologo-context.adapter.js';
+import { KeycloakJwtOdontologoContextAdapter } from '../../infrastructure/auth/keycloak-jwt-odontologo-context.adapter.js';
+import { AuthModule } from '../../infrastructure/auth/auth.module.js';
 import { HISTORIA_CLINICA_REPOSITORY } from './domain/ports/historia-clinica.repository.port.js';
 import { PACIENTE_VALIDATOR_PORT } from './domain/ports/paciente-validator.port.js';
 import { ODONTOLOGO_CONTEXT_PORT } from './domain/ports/odontologo-context.port.js';
@@ -44,6 +46,7 @@ const USE_CASES = [
 @Module({
   imports: [
     ConfigModule,
+    AuthModule,
     MongooseModule.forFeature([
       { name: HistoriaClinicaDocument.name, schema: HistoriaClinicaSchema },
     ]),
@@ -85,9 +88,29 @@ const USE_CASES = [
         { token: ConfigService, optional: true },
       ],
     },
+    MockOdontologoContextAdapter,
+    KeycloakJwtOdontologoContextAdapter,
     {
       provide: ODONTOLOGO_CONTEXT_PORT,
-      useClass: MockOdontologoContextAdapter,
+      useFactory: (
+        keycloakAdapter: KeycloakJwtOdontologoContextAdapter,
+        mockAdapter: MockOdontologoContextAdapter,
+        configService?: ConfigService,
+      ) => {
+        const mode =
+          configService?.get<string>('ODONTOLOGO_AUTH_ADAPTER') ??
+          process.env.ODONTOLOGO_AUTH_ADAPTER ??
+          'keycloak';
+        if (mode === 'mock') {
+          return mockAdapter;
+        }
+        return keycloakAdapter;
+      },
+      inject: [
+        KeycloakJwtOdontologoContextAdapter,
+        MockOdontologoContextAdapter,
+        { token: ConfigService, optional: true },
+      ],
     },
     ...USE_CASES,
   ],
@@ -97,6 +120,7 @@ const USE_CASES = [
     MS1_CREDENTIALS_PROVIDER,
     GraphqlMs1PacienteValidatorAdapter,
     MockPacienteValidatorAdapter,
+    ODONTOLOGO_CONTEXT_PORT,
     OdontologoAuthGuard,
     ...USE_CASES,
   ],

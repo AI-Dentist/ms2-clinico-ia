@@ -9,13 +9,17 @@ import {
   CrearSolicitudEstudioUseCase,
   RegistrarResultadoEstudioUseCase,
   ListarSolicitudesPorHistoriaUseCase,
+  AdjuntarArchivoEstudioUseCase,
 } from './solicitudes-estudio.use-cases.js';
 import { Laboratorio } from '../../domain/entities/laboratorio.entity.js';
 import { TipoEstudio } from '../../domain/entities/tipo-estudio.entity.js';
 import { SolicitudEstudio } from '../../domain/entities/solicitud-estudio.entity.js';
 import { CategoriaEstudio } from '../../domain/enums/categoria-estudio.enum.js';
 import { LaboratorioDuplicadoError, TipoEstudioDuplicadoError, ResultadoYaRegistradoError } from '../../domain/errors/conflict-estudios.errors.js';
-import { ConsultaInvalidaParaEstudioError } from '../../domain/errors/unprocessable-estudios.errors.js';
+import {
+  ConsultaInvalidaParaEstudioError,
+  TransicionSolicitudInvalidaError,
+} from '../../domain/errors/unprocessable-estudios.errors.js';
 import type { ILaboratorioRepositoryPort } from '../../domain/ports/laboratorio.repository.port.js';
 import type { ITipoEstudioRepositoryPort } from '../../domain/ports/tipo-estudio.repository.port.js';
 import type { ISolicitudEstudioRepositoryPort } from '../../domain/ports/solicitud-estudio.repository.port.js';
@@ -338,6 +342,163 @@ describe('Casos de Uso de Estudios e Imagenología', () => {
       expect(historial.length).toBe(1);
       expect(historial[0].historiaClinicaId).toBe('hc_123');
       expect(historial[0].tipoEstudio?.codigo).toBe('HEM-01');
+    });
+
+    it('debe adjuntar un archivo médico a una solicitud y completar el estudio', async () => {
+      const tipo = TipoEstudio.crear({
+        id: 'test_rx',
+        codigo: 'RX-01',
+        nombre: 'Radiografía Periapical',
+        categoria: CategoriaEstudio.IMAGENOLOGIA,
+        descripcion: 'Radiografía periapical digital',
+      });
+      await tipoRepo.guardar(tipo);
+
+      const crearSolUseCase = new CrearSolicitudEstudioUseCase(
+        solRepo,
+        tipoRepo,
+        mockConsultaContext,
+        mockOdontologoContext,
+      );
+
+      const sol = await crearSolUseCase.execute({
+        consultaId: 'cons_valida',
+        tipoEstudioId: 'test_rx',
+        motivo: 'Evaluación de pieza 18',
+        tokenOdontologo: 'token_valido',
+      });
+
+      const adjuntarUseCase = new AdjuntarArchivoEstudioUseCase(
+        solRepo,
+        tipoRepo,
+        labRepo,
+        mockOdontologoContext,
+      );
+
+      const resultado = await adjuntarUseCase.execute({
+        solicitudId: sol.id,
+        archivoAdjunto: {
+          urlArchivo: '/uploads/estudios/rx18.png',
+          nombreArchivo: 'rx18.png',
+          mimeType: 'image/png',
+          tamanioBytes: 1048576,
+        },
+        tokenOdontologo: 'token_valido',
+      });
+
+      expect(resultado.estado).toBe('COMPLETADO');
+      expect(resultado.resultado).toBeDefined();
+      expect(resultado.resultado?.archivoAdjunto?.nombreArchivo).toBe('rx18.png');
+      expect(resultado.resultado?.archivoAdjunto?.urlArchivo).toBe('/uploads/estudios/rx18.png');
+    });
+
+    it('debe actualizar el archivo adjunto en una solicitud con resultado existente', async () => {
+      const tipo = TipoEstudio.crear({
+        id: 'test_rx2',
+        codigo: 'RX-02',
+        nombre: 'Panorámica',
+        categoria: CategoriaEstudio.IMAGENOLOGIA,
+        descripcion: 'Radiografía panorámica',
+      });
+      await tipoRepo.guardar(tipo);
+
+      const crearSolUseCase = new CrearSolicitudEstudioUseCase(
+        solRepo,
+        tipoRepo,
+        mockConsultaContext,
+        mockOdontologoContext,
+      );
+
+      const sol = await crearSolUseCase.execute({
+        consultaId: 'cons_valida',
+        tipoEstudioId: 'test_rx2',
+        motivo: 'Evaluación general',
+        tokenOdontologo: 'token_valido',
+      });
+
+      const registrarResultadoUseCase = new RegistrarResultadoEstudioUseCase(
+        solRepo,
+        tipoRepo,
+        labRepo,
+        mockOdontologoContext,
+      );
+
+      await registrarResultadoUseCase.execute({
+        solicitudId: sol.id,
+        resumen: 'Observaciones iniciales sin archivo',
+        tokenOdontologo: 'token_valido',
+      });
+
+      const adjuntarUseCase = new AdjuntarArchivoEstudioUseCase(
+        solRepo,
+        tipoRepo,
+        labRepo,
+        mockOdontologoContext,
+      );
+
+      const actualizado = await adjuntarUseCase.execute({
+        solicitudId: sol.id,
+        archivoAdjunto: {
+          urlArchivo: '/uploads/estudios/panoramica_final.png',
+          nombreArchivo: 'panoramica_final.png',
+          mimeType: 'image/png',
+          tamanioBytes: 2097152,
+        },
+        tokenOdontologo: 'token_valido',
+      });
+
+      expect(actualizado.estado).toBe('COMPLETADO');
+      expect(actualizado.resultado?.archivoAdjunto?.nombreArchivo).toBe('panoramica_final.png');
+      expect(actualizado.resultado?.resumen).toBe('Observaciones iniciales sin archivo');
+    });
+
+    it('debe rechazar adjuntar archivos a una solicitud cancelada', async () => {
+      const tipo = TipoEstudio.crear({
+        id: 'test_rx3',
+        codigo: 'RX-03',
+        nombre: 'Oclusal',
+        categoria: CategoriaEstudio.IMAGENOLOGIA,
+        descripcion: 'Radiografía oclusal',
+      });
+      await tipoRepo.guardar(tipo);
+
+      const crearSolUseCase = new CrearSolicitudEstudioUseCase(
+        solRepo,
+        tipoRepo,
+        mockConsultaContext,
+        mockOdontologoContext,
+      );
+
+      const solDto = await crearSolUseCase.execute({
+        consultaId: 'cons_valida',
+        tipoEstudioId: 'test_rx3',
+        motivo: 'Control',
+        tokenOdontologo: 'token_valido',
+      });
+
+      const solEntidad = await solRepo.buscarPorId(solDto.id);
+      solEntidad!.cancelar('Cancelado por paciente');
+      await solRepo.guardar(solEntidad!);
+
+      const adjuntarUseCase = new AdjuntarArchivoEstudioUseCase(
+        solRepo,
+        tipoRepo,
+        labRepo,
+        mockOdontologoContext,
+      );
+
+      await expect(
+        adjuntarUseCase.execute({
+          solicitudId: solDto.id,
+          archivoAdjunto: {
+            urlArchivo: '/uploads/estudios/test.png',
+            nombreArchivo: 'test.png',
+            mimeType: 'image/png',
+            tamanioBytes: 500,
+          },
+          tokenOdontologo: 'token_valido',
+        }),
+      ).rejects.toThrow(TransicionSolicitudInvalidaError);
     });
   });
 });

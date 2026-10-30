@@ -38,6 +38,14 @@ export class MongoSolicitudEstudioRepository implements ISolicitudEstudioReposit
             resumen: solicitud.resultado.resumen,
             observaciones: solicitud.resultado.observaciones,
             valoresReferencia: solicitud.resultado.valoresReferencia.map((v) => ({ ...v })),
+            archivoAdjunto: solicitud.resultado.archivoAdjunto
+              ? {
+                  urlArchivo: solicitud.resultado.archivoAdjunto.urlArchivo,
+                  nombreArchivo: solicitud.resultado.archivoAdjunto.nombreArchivo,
+                  mimeType: solicitud.resultado.archivoAdjunto.mimeType,
+                  tamanioBytes: solicitud.resultado.archivoAdjunto.tamanioBytes,
+                }
+              : null,
             registradoEn: solicitud.resultado.registradoEn,
           }
         : null,
@@ -88,6 +96,14 @@ export class MongoSolicitudEstudioRepository implements ISolicitudEstudioReposit
         resumen: doc.resultado.resumen,
         observaciones: doc.resultado.observaciones || null,
         valoresReferencia: doc.resultado.valoresReferencia || [],
+        archivoAdjunto: doc.resultado.archivoAdjunto
+          ? {
+              urlArchivo: doc.resultado.archivoAdjunto.urlArchivo,
+              nombreArchivo: doc.resultado.archivoAdjunto.nombreArchivo,
+              mimeType: doc.resultado.archivoAdjunto.mimeType,
+              tamanioBytes: doc.resultado.archivoAdjunto.tamanioBytes,
+            }
+          : null,
         registradoEn: new Date(doc.resultado.registradoEn),
       });
     }

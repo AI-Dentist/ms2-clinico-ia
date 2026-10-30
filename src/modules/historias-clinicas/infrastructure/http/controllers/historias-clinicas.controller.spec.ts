@@ -115,6 +115,40 @@ describe('HistoriasClinicasController', () => {
       });
       expect(result).toEqual(mockResponseDto);
     });
+
+    it('debe asignar el odontologoId autenticado de la request si el DTO no lo especifica', async () => {
+      const dto = {
+        pacienteId: 'pac-001',
+        odontologoResponsableId: '',
+        antecedentes: { enfermedadesCronicas: [] },
+      };
+      const mockReq = {
+        odontologoActual: { odontologoId: 'od_auth_123' },
+      } as any;
+
+      await controller.crear('token_valido', dto, mockReq);
+
+      expect(mockCrearUseCase.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          odontologoResponsableId: 'od_auth_123',
+        }),
+      );
+    });
+
+    it('debe rechazar con BadRequestException si el odontologoResponsableId no coincide con el operador autenticado', async () => {
+      const dto = {
+        pacienteId: 'pac-001',
+        odontologoResponsableId: 'od_hacker_impostor',
+        antecedentes: { enfermedadesCronicas: [] },
+      };
+      const mockReq = {
+        odontologoActual: { odontologoId: 'od_auth_legit' },
+      } as any;
+
+      await expect(controller.crear('token_valido', dto, mockReq)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
   });
 
   describe('obtenerPorId', () => {

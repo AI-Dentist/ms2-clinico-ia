@@ -19,6 +19,9 @@ import { ODONTOGRAMA_REPOSITORY } from './domain/ports/odontograma.repository.po
 import { LocalHistoriaClinicaContextAdapter } from './infrastructure/adapters/local-historia-clinica-context.adapter.js';
 import { LocalConsultaOdontologicaContextAdapter } from './infrastructure/adapters/local-consulta-odontologica-context.adapter.js';
 import { MockOdontologoContextAdapter } from './infrastructure/adapters/mock-odontologo-context.adapter.js';
+import { KeycloakJwtOdontologoContextAdapter } from '../../infrastructure/auth/keycloak-jwt-odontologo-context.adapter.js';
+import { AuthModule } from '../../infrastructure/auth/auth.module.js';
+import { ConfigService } from '@nestjs/config';
 import { HISTORIA_CLINICA_CONTEXT_PORT } from './application/ports/historia-clinica-context.port.js';
 import { CONSULTA_ODONTOLOGICA_CONTEXT_PORT } from './application/ports/consulta-odontologica-context.port.js';
 import { ODONTOLOGO_CONTEXT_PORT } from './application/ports/odontologo-context.port.js';
@@ -53,6 +56,7 @@ const USE_CASES = [
     ]),
     HistoriasClinicasModule,
     ConsultasOdontologicasModule,
+    AuthModule,
   ],
   controllers: [OdontogramasController],
   providers: [
@@ -68,17 +72,35 @@ const USE_CASES = [
       provide: CONSULTA_ODONTOLOGICA_CONTEXT_PORT,
       useClass: LocalConsultaOdontologicaContextAdapter,
     },
+    MockOdontologoContextAdapter,
+    KeycloakJwtOdontologoContextAdapter,
     {
       provide: ODONTOLOGO_CONTEXT_PORT,
-      useFactory: () => {
+      useFactory: (
+        keycloakAdapter: KeycloakJwtOdontologoContextAdapter,
+        mockAdapter: MockOdontologoContextAdapter,
+        configService?: ConfigService,
+      ) => {
+        const mode =
+          configService?.get<string>('ODONTOLOGO_AUTH_ADAPTER') ??
+          process.env.ODONTOLOGO_AUTH_ADAPTER;
+        if (mode === 'keycloak') {
+          return keycloakAdapter;
+        }
+
         const env = process.env.NODE_ENV;
         if (env !== 'development' && env !== 'test') {
           throw new Error(
-            `CRÍTICO: MockOdontologoContextAdapter deshabilitado por política de seguridad. Solo está permitido en entornos 'development' o 'test' (entorno actual: '${env || 'no configurado'}').`
+            `CRÍTICO: MockOdontologoContextAdapter deshabilitado por política de seguridad. Solo está permitido en entornos 'development' o 'test' (entorno actual: '${env || 'no configurado'}').`,
           );
         }
-        return new MockOdontologoContextAdapter();
+        return mockAdapter;
       },
+      inject: [
+        KeycloakJwtOdontologoContextAdapter,
+        MockOdontologoContextAdapter,
+        { token: ConfigService, optional: true },
+      ],
     },
     OdontologoAuthGuard,
     ...USE_CASES,

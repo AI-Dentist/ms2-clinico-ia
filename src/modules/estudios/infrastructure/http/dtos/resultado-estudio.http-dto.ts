@@ -1,5 +1,23 @@
-import { IsArray, IsDateString, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import type { ValorReferencia } from '../../../domain/entities/resultado-estudio.entity.js';
+
+export class ArchivoAdjuntoHttpDto {
+  @IsString({ message: 'La urlArchivo debe ser una cadena de texto' })
+  @IsNotEmpty({ message: 'La urlArchivo es obligatoria' })
+  urlArchivo: string;
+
+  @IsString({ message: 'El nombreArchivo debe ser una cadena de texto' })
+  @IsNotEmpty({ message: 'El nombreArchivo es obligatorio' })
+  nombreArchivo: string;
+
+  @IsString({ message: 'El mimeType debe ser una cadena de texto' })
+  @IsNotEmpty({ message: 'El mimeType es obligatorio' })
+  mimeType: string;
+
+  @IsNumber({}, { message: 'El tamanioBytes debe ser un número entero' })
+  tamanioBytes: number;
+}
 
 export class RegistrarResultadoEstudioHttpDto {
   @IsString({ message: 'El laboratorioId debe ser una cadena de texto' })
@@ -21,4 +39,9 @@ export class RegistrarResultadoEstudioHttpDto {
   @IsArray({ message: 'Los valores de referencia deben ser un arreglo' })
   @IsOptional()
   valoresReferencia?: ValorReferencia[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ArchivoAdjuntoHttpDto)
+  archivoAdjunto?: ArchivoAdjuntoHttpDto;
 }

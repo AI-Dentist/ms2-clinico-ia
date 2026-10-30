@@ -46,6 +46,14 @@ export class EstudiosMapper {
       resumen: res.resumen,
       observaciones: res.observaciones,
       valoresReferencia: res.valoresReferencia.map((v: any) => ({ ...v })),
+      archivoAdjunto: res.archivoAdjunto
+        ? {
+            urlArchivo: res.archivoAdjunto.urlArchivo,
+            nombreArchivo: res.archivoAdjunto.nombreArchivo,
+            mimeType: res.archivoAdjunto.mimeType,
+            tamanioBytes: res.archivoAdjunto.tamanioBytes,
+          }
+        : null,
       registradoEn: res.registradoEn.toISOString(),
     };
   }

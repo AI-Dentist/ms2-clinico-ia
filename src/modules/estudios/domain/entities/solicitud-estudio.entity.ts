@@ -1,6 +1,7 @@
+import crypto from 'node:crypto';
 import { EstadoSolicitudEstudio } from '../enums/estado-solicitud-estudio.enum.js';
 import { PrioridadEstudio } from '../enums/prioridad-estudio.enum.js';
-import { ResultadoEstudio } from './resultado-estudio.entity.js';
+import { ResultadoEstudio, type ArchivoAdjuntoEstudio } from './resultado-estudio.entity.js';
 
 export interface SolicitudEstudioProps {
   id: string;
@@ -187,6 +188,41 @@ export class SolicitudEstudio {
     }
     this._resultado = resultado;
     this._estado = EstadoSolicitudEstudio.COMPLETADO;
+    this._actualizadoEn = new Date();
+  }
+
+  adjuntarArchivo(
+    archivo: ArchivoAdjuntoEstudio,
+    registradoPor: string,
+    resultadoId?: string,
+  ): void {
+    if (this._estado === EstadoSolicitudEstudio.CANCELADO) {
+      throw new Error('No es posible adjuntar archivos a una solicitud de estudio cancelada.');
+    }
+    if (!this._resultado) {
+      this._resultado = ResultadoEstudio.crear({
+        id: resultadoId || `res_${crypto.randomUUID()}`,
+        solicitudEstudioId: this._id,
+        fechaResultado: new Date(),
+        registradoPor,
+        resumen: `Archivo médico adjunto: ${archivo.nombreArchivo}`,
+        archivoAdjunto: archivo,
+      });
+      this._estado = EstadoSolicitudEstudio.COMPLETADO;
+    } else {
+      this._resultado = ResultadoEstudio.reconstituir({
+        id: this._resultado.id,
+        solicitudEstudioId: this._id,
+        laboratorioId: this._resultado.laboratorioId,
+        fechaResultado: this._resultado.fechaResultado,
+        registradoPor: this._resultado.registradoPor,
+        resumen: this._resultado.resumen,
+        observaciones: this._resultado.observaciones,
+        valoresReferencia: [...this._resultado.valoresReferencia],
+        archivoAdjunto: archivo,
+        registradoEn: this._resultado.registradoEn,
+      });
+    }
     this._actualizadoEn = new Date();
   }
 
