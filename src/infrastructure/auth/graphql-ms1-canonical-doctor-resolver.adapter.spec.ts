@@ -245,4 +245,36 @@ describe('GraphqlMs1CanonicalDoctorResolverAdapter (Public Contract & Invariants
     expect(receivedAuthHeaders).toContain(`Bearer ${CALLER_TOKEN_B}`);
     expect(receivedAuthHeaders.length).toBe(2);
   });
+
+  it('11. Debe normalizar MS1_TIMEOUT_MS como string ("1500") sin fallar en AbortSignal.timeout', async () => {
+    const stringConfig = {
+      get: vi.fn((key: string, defaultValue?: unknown) => {
+        if (key === 'MS1_GRAPHQL_URL') return MS1_GRAPHQL_URL;
+        if (key === 'MS1_TIMEOUT_MS') return '1500';
+        return defaultValue;
+      }),
+    } as unknown as ConfigService;
+
+    const stringAdapter = new GraphqlMs1CanonicalDoctorResolverAdapter(stringConfig);
+
+    let fetchCalled = false;
+    let capturedAuthHeader = '';
+    globalThis.fetch = vi.fn().mockImplementation(async (_url, init) => {
+      fetchCalled = true;
+      capturedAuthHeader = (init?.headers as Record<string, string>)?.['Authorization'] || '';
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: { obtenerMiOdontologoId: CANONICAL_DOCTOR_UUID_A },
+        }),
+      } as Response;
+    });
+
+    const doctorId = await stringAdapter.resolverOdontologoId(CALLER_TOKEN_A);
+
+    expect(fetchCalled).toBe(true);
+    expect(capturedAuthHeader).toBe(`Bearer ${CALLER_TOKEN_A}`);
+    expect(doctorId).toBe(CANONICAL_DOCTOR_UUID_A);
+  });
 });

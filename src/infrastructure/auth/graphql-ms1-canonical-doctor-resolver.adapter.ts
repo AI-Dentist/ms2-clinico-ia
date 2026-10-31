@@ -46,13 +46,13 @@ export class GraphqlMs1CanonicalDoctorResolverAdapter implements ICanonicalDocto
       process.env.MS1_GRAPHQL_URL ??
       'http://127.0.0.1:8081/graphql';
 
-    const configuredTimeout =
-      this.configService?.get<number>('MS1_TIMEOUT_MS') ??
-      (process.env.MS1_TIMEOUT_MS ? Number(process.env.MS1_TIMEOUT_MS) : undefined);
+    const rawTimeout =
+      this.configService?.get<string | number>('MS1_TIMEOUT_MS') ?? process.env.MS1_TIMEOUT_MS;
+    const parsedTimeout = rawTimeout !== undefined ? Number(rawTimeout) : undefined;
 
     this.timeoutMs =
-      configuredTimeout !== undefined && !isNaN(configuredTimeout) && configuredTimeout > 0
-        ? configuredTimeout
+      parsedTimeout !== undefined && !isNaN(parsedTimeout) && parsedTimeout > 0
+        ? parsedTimeout
         : 2000;
   }
 
