@@ -18,6 +18,8 @@ export interface EnvironmentVariables {
   // Autenticación Keycloak & JWT (Pilar Seguridad)
   KEYCLOAK_URL?: string;
   KEYCLOAK_REALM?: string;
+  KEYCLOAK_AUDIENCE?: string;
+  KEYCLOAK_ISSUER?: string;
   KEYCLOAK_PUBLIC_KEY?: string;
   JWT_SECRET?: string;
   ODONTOLOGO_AUTH_ADAPTER?: 'mock' | 'keycloak';
@@ -191,6 +193,9 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
   const host = typeof config.HOST === 'string' && config.HOST.trim() ? config.HOST.trim() : '0.0.0.0';
   const keycloakUrl = typeof config.KEYCLOAK_URL === 'string' && config.KEYCLOAK_URL.trim() ? config.KEYCLOAK_URL.trim() : 'http://localhost:8080';
   const keycloakRealm = typeof config.KEYCLOAK_REALM === 'string' && config.KEYCLOAK_REALM.trim() ? config.KEYCLOAK_REALM.trim() : 'dental-platform';
+  const keycloakAudience = typeof config.KEYCLOAK_AUDIENCE === 'string' && config.KEYCLOAK_AUDIENCE.trim() ? config.KEYCLOAK_AUDIENCE.trim() : 'ms2-clinico-ia';
+  const derivedIssuer = `${keycloakUrl.replace(/\/+$/, '')}/realms/${encodeURIComponent(keycloakRealm)}`;
+  const keycloakIssuer = typeof config.KEYCLOAK_ISSUER === 'string' && config.KEYCLOAK_ISSUER.trim() ? config.KEYCLOAK_ISSUER.trim() : derivedIssuer;
   const keycloakPublicKey = typeof config.KEYCLOAK_PUBLIC_KEY === 'string' && config.KEYCLOAK_PUBLIC_KEY.trim() ? config.KEYCLOAK_PUBLIC_KEY.trim() : undefined;
   const jwtSecret = typeof config.JWT_SECRET === 'string' && config.JWT_SECRET.trim() ? config.JWT_SECRET.trim() : undefined;
   const rawAuthAdapter = typeof config.ODONTOLOGO_AUTH_ADAPTER === 'string' ? config.ODONTOLOGO_AUTH_ADAPTER.trim().toLowerCase() : 'keycloak';
@@ -204,6 +209,8 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
     ...(corsOrigins ? { CORS_ORIGINS: corsOrigins } : {}),
     KEYCLOAK_URL: keycloakUrl,
     KEYCLOAK_REALM: keycloakRealm,
+    KEYCLOAK_AUDIENCE: keycloakAudience,
+    KEYCLOAK_ISSUER: keycloakIssuer,
     ...(keycloakPublicKey ? { KEYCLOAK_PUBLIC_KEY: keycloakPublicKey } : {}),
     ...(jwtSecret ? { JWT_SECRET: jwtSecret } : {}),
     ODONTOLOGO_AUTH_ADAPTER: odontologoAuthAdapter,

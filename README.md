@@ -23,7 +23,27 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository for MS2 (Atención Clínica, Expedientes Odontológicos e Inteligencia Artificial).
+
+## Authentication & JWT Security Policy
+
+MS2 validates incoming Bearer JWT tokens via `KeycloakJwtOdontologoContextAdapter` against the platform's Keycloak identity provider or configured public key.
+
+### Configuration Variables
+
+| Variable Name | Required | Default Value | Description / Synthetic Public Example |
+|---|---|---|---|
+| `KEYCLOAK_URL` | No | `http://localhost:8080` | Base URL of Keycloak instance (e.g. `http://localhost:8080` or `https://auth.example.com`). |
+| `KEYCLOAK_REALM` | No | `dental-platform` | Realm name containing clinical practitioners and roles (e.g. `dental-platform`). |
+| `KEYCLOAK_ISSUER` | No | `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}` | Trusted token issuer (`iss` claim). Synthetic example: `http://localhost:8080/realms/dental-platform`. |
+| `KEYCLOAK_AUDIENCE` | No | `ms2-clinico-ia` | Target resource audience (`aud` claim). Must match `ms2-clinico-ia` exactly or be present in the audience list. **Resource audience is never the realm name**. |
+| `KEYCLOAK_PUBLIC_KEY` | No | `undefined` | Optional RS256 SPKI public key PEM for offline verification without JWKS. |
+| `JWT_SECRET` | No | `undefined` | Optional HS256 symmetric secret for test environments. |
+
+### Strict Claims Enforcement
+- **Issuer (`iss`)**: Tokens must be issued by the configured trusted issuer. Mismatched or absent `iss` claims are rejected immediately.
+- **Audience (`aud`)**: The token must explicitly target `ms2-clinico-ia` (as a string or within an array of audiences). Tokens targeted solely to the realm (e.g. `dental-platform`) or other microservices without `ms2-clinico-ia` are rejected.
+- **Fail-Closed Policy**: Claim validation failures throw `AutenticacionRequeridaError` (HTTP 401) immediately and never degrade to weaker fallback or unverified decoding.
 
 ## Project setup
 

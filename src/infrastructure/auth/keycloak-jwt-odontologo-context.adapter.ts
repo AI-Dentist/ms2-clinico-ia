@@ -72,6 +72,16 @@ export class KeycloakJwtOdontologoContextAdapter implements IOdontologoContextPo
     const jwtSecret =
       this.configService?.get<string>('JWT_SECRET') ?? process.env.JWT_SECRET;
 
+    const expectedAudience =
+      this.configService?.get<string>('KEYCLOAK_AUDIENCE') ??
+      process.env.KEYCLOAK_AUDIENCE ??
+      'ms2-clinico-ia';
+    const derivedIssuer = `${keycloakUrl.replace(/\/+$/, '')}/realms/${encodeURIComponent(realm)}`;
+    const expectedIssuer =
+      this.configService?.get<string>('KEYCLOAK_ISSUER') ??
+      process.env.KEYCLOAK_ISSUER ??
+      derivedIssuer;
+
     try {
       let payload: jose.JWTPayload;
 
@@ -81,12 +91,18 @@ export class KeycloakJwtOdontologoContextAdapter implements IOdontologoContextPo
         const publicKey = await jose.importSPKI(pem, 'RS256');
         const verification = await jose.jwtVerify(t, publicKey, {
           algorithms: ['RS256'],
+          issuer: expectedIssuer,
+          audience: expectedAudience,
         });
         payload = verification.payload;
       } else if (jwtSecret) {
         // Secreto simétrico configurado (HS256)
         const secretBytes = new TextEncoder().encode(jwtSecret);
-        const verification = await jose.jwtVerify(t, secretBytes);
+        const verification = await jose.jwtVerify(t, secretBytes, {
+          algorithms: ['HS256'],
+          issuer: expectedIssuer,
+          audience: expectedAudience,
+        });
         payload = verification.payload;
       } else {
         // Endpoint JWKS de Keycloak
@@ -96,11 +112,30 @@ export class KeycloakJwtOdontologoContextAdapter implements IOdontologoContextPo
           this.remoteJwks = jose.createRemoteJWKSet(new URL(jwksUrlString));
         }
         try {
-          const verification = await jose.jwtVerify(t, this.remoteJwks);
+          const verification = await jose.jwtVerify(t, this.remoteJwks, {
+            algorithms: ['RS256'],
+            issuer: expectedIssuer,
+            audience: expectedAudience,
+          });
           payload = verification.payload;
-        } catch (jwksErr) {
+        } catch (jwksErr: any) {
+          // Si el error corresponde a validación de claims, firma o expiración, no degradar a fallback
+          if (
+            jwksErr instanceof jose.errors.JWTClaimValidationFailed ||
+            jwksErr instanceof jose.errors.JWTExpired ||
+            jwksErr instanceof jose.errors.JWSSignatureVerificationFailed ||
+            jwksErr instanceof jose.errors.JWTInvalid ||
+            jwksErr?.code === 'ERR_JWT_CLAIM_VALIDATION_FAILED' ||
+            jwksErr?.code === 'ERR_JWT_EXPIRED' ||
+            jwksErr?.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED' ||
+            jwksErr?.code === 'ERR_JWS_INVALID' ||
+            jwksErr?.code === 'ERR_JWT_INVALID'
+          ) {
+            throw jwksErr;
+          }
+
           if (!isProduction) {
-            // En desarrollo/test con Keycloak offline, permitir decodificación con verificación de caducidad
+            // En desarrollo/test con Keycloak offline (p. ej. error de red al consultar JWKS), permitir decodificación con validación estricta de claims
             this.logger.warn(
               `Keycloak JWKS no disponible (${(jwksErr as Error).message}). Decodificando JWT en modo tolerante dev/test.`,
             );
@@ -111,6 +146,28 @@ export class KeycloakJwtOdontologoContextAdapter implements IOdontologoContextPo
             }
             if (typeof payload.nbf === 'number' && payload.nbf > nowSec) {
               throw new AutenticacionRequeridaError('Token JWT aún no es válido (nbf).');
+            }
+
+            // Validación estricta de emisor (iss) en fallback
+            if (!payload.iss || typeof payload.iss !== 'string' || payload.iss !== expectedIssuer) {
+              throw new AutenticacionRequeridaError(
+                `Token JWT con emisor (iss) inválido o ausente. Esperado: '${expectedIssuer}'.`,
+              );
+            }
+
+            // Validación estricta de audiencia (aud) en fallback
+            const aud = payload.aud;
+            const matchesAudience =
+              typeof aud === 'string'
+                ? aud === expectedAudience
+                : Array.isArray(aud)
+                  ? aud.includes(expectedAudience)
+                  : false;
+
+            if (!matchesAudience) {
+              throw new AutenticacionRequeridaError(
+                `Token JWT con audiencia (aud) inválida o ausente. Requerida: '${expectedAudience}'.`,
+              );
             }
           } else {
             throw jwksErr;
