@@ -187,7 +187,7 @@ describe('HttpMs3CitaValidatorAdapter', () => {
     expect(res.motivoInvalidez).toContain('NO ASISTIÓ');
   });
 
-  it('debe rechazar con motivo explícito si la cita está REPROGRAMADA', async () => {
+  it('debe validar exitosamente cuando la cita está REPROGRAMADA (S4: attendible sin confirmación adicional)', async () => {
     const adapter = createAdapter();
 
     global.fetch = vi.fn().mockResolvedValue({
@@ -199,13 +199,36 @@ describe('HttpMs3CitaValidatorAdapter', () => {
           id: 'cita_reprog',
           paciente_id: 'pac_001',
           estado: 'REPROGRAMADA',
+          fecha_hora: '2026-11-05 14:30:00',
+        },
+      }),
+    });
+
+    const res = await adapter.validarCitaParaAtencion('cita_reprog', 'pac_001');
+    expect(res.esValida).toBe(true);
+    expect(res.motivoInvalidez).toBeUndefined();
+  });
+
+  it('debe rechazar cita REPROGRAMADA si el paciente no coincide con el expediente', async () => {
+    const adapter = createAdapter();
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: {
+          id: 'cita_reprog',
+          paciente_id: 'pac_otro',
+          estado: 'REPROGRAMADA',
+          fecha_hora: '2026-11-05 14:30:00',
         },
       }),
     });
 
     const res = await adapter.validarCitaParaAtencion('cita_reprog', 'pac_001');
     expect(res.esValida).toBe(false);
-    expect(res.motivoInvalidez).toContain('REPROGRAMADA');
+    expect(res.motivoInvalidez).toContain('pertenece a otro paciente');
   });
 
   it('debe activar fallback al listado general /citas si el endpoint individual devuelve 404', async () => {

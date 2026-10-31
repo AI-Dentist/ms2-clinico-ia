@@ -60,6 +60,14 @@ In this microservice architecture, Keycloak manages user identities (`sub: UUID`
 - **Fail-Closed Guarantee**: Missing, null, unlinked, inactive, non-UUID, timeout, network or HTTP/GraphQL errors fail closed immediately (HTTP 401), preventing any write to the clinical repository or transactional outbox.
 - **Historical Record Limitation**: Historical records created prior to this integration retain their immutable stored values; existing documents are not migrated or rewritten. Newly opened consultations strictly enforce and store the canonical practitioner UUID.
 
+## Appointment Validation & Rescheduled Appointments (MS3 Integration - S4)
+
+In coordination with MS3 (Agendamiento & Stock):
+- **Rescheduled Eligibility (`REPROGRAMADA`)**: Appointments in state `REPROGRAMADA` are eligible to initiate clinical consultation directly without additional confirmation, provided the patient ID matches the clinical record.
+- **Valid Attention States**: `RESERVADA`, `CONFIRMADA`, `EN_ATENCION`, `PROGRAMADA`, `PENDIENTE`, and `REPROGRAMADA`.
+- **Closed / Invalid States**: Appointments in states `CANCELADA`, `COMPLETADA`, `NO_ASISTIO`, or unknown states are rejected with descriptive reasons and leave clinical storage and outbox state unchanged.
+- **Patient Titularity Matching**: The appointment must belong to the patient titular of the clinical record; mismatches are strictly rejected.
+
 ## Project setup
 
 ```bash

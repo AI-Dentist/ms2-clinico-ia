@@ -34,6 +34,7 @@ const ESTADOS_VALIDOS_ATENCION = new Set([
   'EN_ATENCION',
   'PROGRAMADA',
   'PENDIENTE',
+  'REPROGRAMADA',
 ]);
 
 /**
@@ -43,8 +44,8 @@ const ESTADOS_VALIDOS_ATENCION = new Set([
  * - Configura la URL base y timeout mediante variables de entorno (MS3_HTTP_URL, MS3_TIMEOUT_MS, MS3_BEARER_TOKEN).
  * - Consulta directamente la cita por ID (/api/agendamiento/citas/{id}) con fallback resiliente al listado (/api/agendamiento/citas).
  * - Valida pertenencia del paciente al expediente esperado (paciente_id vs pacienteId).
- * - Evalúa estados clínicos aptos para iniciar atención (RESERVADA, CONFIRMADA, EN_ATENCION, etc.)
- *   rechazando CANCELADA, COMPLETADA, NO_ASISTIO o REPROGRAMADA con motivos descriptivos.
+ * - Evalúa estados clínicos aptos para iniciar atención (RESERVADA, CONFIRMADA, EN_ATENCION, REPROGRAMADA, etc.)
+ *   rechazando CANCELADA, COMPLETADA o NO_ASISTIO con motivos descriptivos.
  * - Maneja timeouts y fallas de red sin quebrar la ejecución, retornando un ResultadoValidacionCita limpio.
  */
 @Injectable()
@@ -241,13 +242,6 @@ export class HttpMs3CitaValidatorAdapter implements ICitaValidatorPort {
       return {
         esValida: false,
         motivoInvalidez: `La cita '${citaId}' se encuentra registrada como NO ASISTIÓ en MS3.`,
-      };
-    }
-
-    if (estado === 'REPROGRAMADA') {
-      return {
-        esValida: false,
-        motivoInvalidez: `La cita '${citaId}' se encuentra REPROGRAMADA en MS3 y requiere nueva confirmación.`,
       };
     }
 
