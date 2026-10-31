@@ -7,20 +7,38 @@ describe('KeycloakJwtOdontologoContextAdapter', () => {
   let adapter: KeycloakJwtOdontologoContextAdapter;
   const originalEnv = process.env.NODE_ENV;
   const originalJwtSecret = process.env.JWT_SECRET;
+  const originalFetch = globalThis.fetch;
   const testSecret = 'super_secret_jwt_key_for_testing_12345';
 
   const defaultIssuer = 'http://localhost:8080/realms/dental-platform';
   const defaultAudience = 'ms2-clinico-ia';
+  const CANONICAL_DOCTOR_UUID = '70000000-0000-4000-a000-000000000001';
 
   beforeEach(() => {
     process.env.NODE_ENV = 'test';
     process.env.JWT_SECRET = testSecret;
+
+    // Simular MS1 GraphQL respondiendo con el UUID canónico del odontólogo
+    globalThis.fetch = vi.fn().mockImplementation(async () => {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            obtenerMiOdontologoId: CANONICAL_DOCTOR_UUID,
+          },
+        }),
+      } as Response;
+    });
+
     adapter = new KeycloakJwtOdontologoContextAdapter();
   });
 
   afterEach(() => {
+    globalThis.fetch = originalFetch;
     process.env.NODE_ENV = originalEnv;
     process.env.JWT_SECRET = originalJwtSecret;
+    vi.restoreAllMocks();
   });
 
   it('debe resolver tokens de la lista blanca sintética en desarrollo/test', async () => {
@@ -53,7 +71,8 @@ describe('KeycloakJwtOdontologoContextAdapter', () => {
       .sign(secretBytes);
 
     const contexto = await adapter.obtenerOdontologoActual(token);
-    expect(contexto.odontologoId).toBe('od_keycloak_sub_999');
+    expect(contexto.odontologoId).toBe(CANONICAL_DOCTOR_UUID);
+    expect((contexto as any).keycloakSubject).toBe('od_keycloak_sub_999');
     expect(contexto.roles).toEqual(expect.arrayContaining(['ODONTOLOGO', 'ADMIN']));
     expect(contexto.email).toBe('dr.garcia@dental.com');
   });
@@ -135,7 +154,7 @@ describe('KeycloakJwtOdontologoContextAdapter', () => {
       .sign(secretBytes);
 
     const contexto = await adapter.obtenerOdontologoActual(`Bearer ${token}`);
-    expect(contexto.odontologoId).toBe('od_sub_bearer_test');
+    expect(contexto.odontologoId).toBe(CANONICAL_DOCTOR_UUID);
   });
 
   it('debe normalizar roles con prefijo ROLE_ (e.g. ROLE_ODONTOLOGO -> ODONTOLOGO)', async () => {
@@ -175,7 +194,7 @@ describe('KeycloakJwtOdontologoContextAdapter', () => {
       .sign(keyPair.privateKey);
 
     const contexto = await rs256Adapter.obtenerOdontologoActual(token);
-    expect(contexto.odontologoId).toBe('od_rs256_user');
+    expect(contexto.odontologoId).toBe(CANONICAL_DOCTOR_UUID);
     expect(contexto.roles).toContain('ODONTOLOGO');
 
     delete process.env.KEYCLOAK_PUBLIC_KEY;
@@ -263,7 +282,7 @@ describe('KeycloakJwtOdontologoContextAdapter', () => {
       .sign(dummyKey);
 
     const contexto = await fallbackAdapter.obtenerOdontologoActual(tokenValido);
-    expect(contexto.odontologoId).toBe('od_valid_fallback');
+    expect(contexto.odontologoId).toBe(CANONICAL_DOCTOR_UUID);
     expect(contexto.roles).toContain('ODONTOLOGO');
   });
 
@@ -367,7 +386,7 @@ describe('KeycloakJwtOdontologoContextAdapter', () => {
         .sign(secretBytes);
 
       const ctx = await adapter.obtenerOdontologoActual(token);
-      expect(ctx.odontologoId).toBe('od_keycloak_sub_999');
+      expect(ctx.odontologoId).toBe(CANONICAL_DOCTOR_UUID);
       expect(ctx.roles).toContain('ODONTOLOGO');
     });
 
@@ -384,7 +403,7 @@ describe('KeycloakJwtOdontologoContextAdapter', () => {
         .sign(secretBytes);
 
       const ctx = await adapter.obtenerOdontologoActual(token);
-      expect(ctx.odontologoId).toBe('od_keycloak_sub_array_aud');
+      expect(ctx.odontologoId).toBe(CANONICAL_DOCTOR_UUID);
       expect(ctx.roles).toContain('ODONTOLOGO');
     });
 
@@ -406,7 +425,7 @@ describe('KeycloakJwtOdontologoContextAdapter', () => {
         .sign(secretBytes);
 
       const ctx = await customAdapter.obtenerOdontologoActual(tokenValido);
-      expect(ctx.odontologoId).toBe('od_custom_cfg');
+      expect(ctx.odontologoId).toBe(CANONICAL_DOCTOR_UUID);
 
       delete process.env.KEYCLOAK_ISSUER;
       delete process.env.KEYCLOAK_AUDIENCE;
@@ -462,6 +481,53 @@ describe('KeycloakJwtOdontologoContextAdapter', () => {
       );
 
       delete process.env.KEYCLOAK_PUBLIC_KEY;
+    });
+  });
+
+  describe('Resolución canónica de identidad en MS1 y desacople sub != doctorPK', () => {
+    it('debe desacoplar sub != doctorPK: asigna canonical UUID a odontologoId y sub a keycloakSubject', async () => {
+      const secretBytes = new TextEncoder().encode(testSecret);
+      const token = await new jose.SignJWT({
+        realm_access: { roles: ['ODONTOLOGO'] },
+        iss: defaultIssuer,
+        aud: defaultAudience,
+      })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setSubject('550e8400-e29b-41d4-a716-446655440000') // Keycloak user sub
+        .setExpirationTime('2h')
+        .sign(secretBytes);
+
+      const ctx = await adapter.obtenerOdontologoActual(token);
+      expect(ctx.odontologoId).toBe(CANONICAL_DOCTOR_UUID);
+      expect(ctx.odontologoId).not.toBe('550e8400-e29b-41d4-a716-446655440000');
+      expect((ctx as any).keycloakSubject).toBe('550e8400-e29b-41d4-a716-446655440000');
+    });
+
+    it('debe fallar cerrado con AutenticacionRequeridaError si la resolución canónica falla (usuario no vinculado)', async () => {
+      const mockFailingResolver = {
+        resolverOdontologoId: vi.fn().mockRejectedValue(
+          new AutenticacionRequeridaError('El usuario autenticado no está vinculado a un odontólogo activo en MS1.'),
+        ),
+      };
+
+      const failingAdapter = new KeycloakJwtOdontologoContextAdapter(undefined, mockFailingResolver);
+      const secretBytes = new TextEncoder().encode(testSecret);
+      const token = await new jose.SignJWT({
+        realm_access: { roles: ['ODONTOLOGO'] },
+        iss: defaultIssuer,
+        aud: defaultAudience,
+      })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setSubject('user_sin_vinculo_ms1')
+        .setExpirationTime('2h')
+        .sign(secretBytes);
+
+      await expect(failingAdapter.obtenerOdontologoActual(token)).rejects.toThrow(
+        AutenticacionRequeridaError,
+      );
+      await expect(failingAdapter.obtenerOdontologoActual(token)).rejects.toThrow(
+        /no está vinculado a un odontólogo activo/i,
+      );
     });
   });
 });

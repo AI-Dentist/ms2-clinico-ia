@@ -45,6 +45,21 @@ MS2 validates incoming Bearer JWT tokens via `KeycloakJwtOdontologoContextAdapte
 - **Audience (`aud`)**: The token must explicitly target `ms2-clinico-ia` (as a string or within an array of audiences). Tokens targeted solely to the realm (e.g. `dental-platform`) or other microservices without `ms2-clinico-ia` are rejected.
 - **Fail-Closed Policy**: Claim validation failures throw `AutenticacionRequeridaError` (HTTP 401) immediately and never degrade to weaker fallback or unverified decoding.
 
+## Canonical Practitioner Resolution (MS1 Identity Integration)
+
+In this microservice architecture, Keycloak manages user identities (`sub: UUID`), while MS1 (ERP) manages master practitioner records (`odontologoId: UUID`).
+
+- **Query Contract**: MS2 resolves the canonical practitioner ID via `GraphqlMs1CanonicalDoctorResolverAdapter` executing:
+  ```graphql
+  query ObtenerMiOdontologoId {
+    obtenerMiOdontologoId
+  }
+  ```
+- **Caller Token Forwarding**: The incoming caller's validated Bearer token is strictly forwarded (`Authorization: Bearer <token>`) to `MS1_GRAPHQL_URL`. Static service tokens (`MS1_BEARER_TOKEN`) are **never** used for self-identity.
+- **Identity Decoupling**: Resolves `sub != doctorPK`. The canonical doctor UUID returned by MS1 is stored in the clinical entity as `odontologoId` and emitted in flat messages for billing (`ConsultaFinalizadaMensajePlanoDto`), while the authenticated user subject (`sub`) is preserved as `keycloakSubject` for distinct audit semantics.
+- **Fail-Closed Guarantee**: Missing, null, unlinked, inactive, non-UUID, timeout, network or HTTP/GraphQL errors fail closed immediately (HTTP 401), preventing any write to the clinical repository or transactional outbox.
+- **Historical Record Limitation**: Historical records created prior to this integration retain their immutable stored values; existing documents are not migrated or rewritten. Newly opened consultations strictly enforce and store the canonical practitioner UUID.
+
 ## Project setup
 
 ```bash

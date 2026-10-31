@@ -102,5 +102,26 @@ describe('ConsultaOrdenCobroMs1Mapper', () => {
       observacionesCobro: 'Facturar a nombre de Juan Pérez',
     });
   });
+
+  it('3. Debe preservar la forma plana del evento emitiendo el UUID canónico del odontólogo (desacoplado del sub de Keycloak)', () => {
+    // Escenario T4: sub de Keycloak = '550e8400-e29b-41d4-a716-446655440000'
+    // UUID canónico resuelto en MS1 = '70000000-0000-0000-0000-000000000002'
+    const CANONICAL_RESOLVED_UUID = '70000000-0000-0000-0000-000000000002';
+    const servicio = ServicioFacturableConsulta.crear({
+      servicioId: SERVICIO_UUID,
+      nombre: 'Limpieza dental profunda',
+      precioUnitarioBs: '200.00',
+      cantidad: 1,
+      piezaDental: null,
+    });
+
+    const consulta = crearConsultaCompletada([servicio]);
+    const mensaje = ConsultaOrdenCobroMs1Mapper.toMensajePlano(consulta);
+
+    expect(mensaje).not.toBeNull();
+    expect(mensaje?.odontologoId).toBe(CANONICAL_RESOLVED_UUID);
+    expect(mensaje?.consultaId).toBe(CONSULTA_UUID);
+    expect(typeof mensaje?.odontologoId).toBe('string');
+  });
 });
 

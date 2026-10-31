@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as jose from 'jose';
 import type {
@@ -6,6 +6,13 @@ import type {
   OdontologoContexto,
 } from '../../modules/historias-clinicas/domain/ports/odontologo-context.port.js';
 import { AutenticacionRequeridaError } from '../../modules/historias-clinicas/application/errors/autenticacion-requerida.error.js';
+import type { ICanonicalDoctorResolver } from './canonical-doctor-resolver.port.js';
+import { CANONICAL_DOCTOR_RESOLVER } from './canonical-doctor-resolver.port.js';
+import { GraphqlMs1CanonicalDoctorResolverAdapter } from './graphql-ms1-canonical-doctor-resolver.adapter.js';
+
+export interface KeycloakOdontologoContexto extends OdontologoContexto {
+  keycloakSubject?: string;
+}
 
 @Injectable()
 export class KeycloakJwtOdontologoContextAdapter implements IOdontologoContextPort {
@@ -23,10 +30,20 @@ export class KeycloakJwtOdontologoContextAdapter implements IOdontologoContextPo
 
   private remoteJwks: ReturnType<typeof jose.createRemoteJWKSet> | null = null;
   private cachedJwksUrl: string | null = null;
+  private readonly canonicalDoctorResolver: ICanonicalDoctorResolver;
 
-  constructor(@Optional() private readonly configService?: ConfigService) {}
+  constructor(
+    @Optional() private readonly configService?: ConfigService,
+    @Optional()
+    @Inject(CANONICAL_DOCTOR_RESOLVER)
+    canonicalDoctorResolver?: ICanonicalDoctorResolver,
+  ) {
+    this.canonicalDoctorResolver =
+      canonicalDoctorResolver ??
+      new GraphqlMs1CanonicalDoctorResolverAdapter(this.configService);
+  }
 
-  async obtenerOdontologoActual(token: string): Promise<OdontologoContexto> {
+  async obtenerOdontologoActual(token: string): Promise<KeycloakOdontologoContexto> {
     const t = token?.trim().replace(/^Bearer\s+/i, '');
     if (!t) {
       throw new AutenticacionRequeridaError('Token de autenticación no proporcionado.');
@@ -183,8 +200,12 @@ export class KeycloakJwtOdontologoContextAdapter implements IOdontologoContextPo
 
       const roles = this.extraerRoles(payload);
 
-      return {
-        odontologoId: payload.sub.trim(),
+      // Resolver identificador canónico del profesional en MS1 usando el Bearer token del llamador
+      const canonicalDoctorId = await this.canonicalDoctorResolver.resolverOdontologoId(t);
+
+      const contexto: KeycloakOdontologoContexto = {
+        odontologoId: canonicalDoctorId,
+        keycloakSubject: payload.sub.trim(),
         roles,
         email: typeof payload.email === 'string' ? payload.email : undefined,
         nombre:
@@ -194,6 +215,8 @@ export class KeycloakJwtOdontologoContextAdapter implements IOdontologoContextPo
               ? payload.preferred_username
               : undefined,
       };
+
+      return contexto;
     } catch (err: any) {
       if (err instanceof AutenticacionRequeridaError) {
         throw err;
