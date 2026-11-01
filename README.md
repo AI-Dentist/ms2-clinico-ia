@@ -100,6 +100,26 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+### Native Node ESM Smoke Check
+
+Verifies Node.js native ESM startup compatibility without bootstrapping the full NestJS application, database connections, or requiring `.env` files:
+
+```bash
+# 1. Build production artifacts (prerequisite)
+$ npm run build
+
+# 2. Run native ESM import smoke check
+$ npm run check:native-esm
+# or directly:
+$ node scripts/check-native-esm.mjs
+```
+
+- **Prerequisite**: Compiled artifacts must exist in `./dist` (fails with exit code 1 and actionable guidance if missing).
+- **Exit Behavior**:
+  - Exit `0`: Native dynamic ESM import of production modules (`MongoUnitOfWorkCierreConsultaAdapter`, `AppModule`) succeeded.
+  - Exit `1`: SyntaxError, missing build artifacts, or CommonJS interop named export failure detected.
+- **Safety**: Pure offline import check; does not initiate HTTP listeners, database connections, or background relays.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

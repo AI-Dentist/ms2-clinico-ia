@@ -1,6 +1,6 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
-import { Connection, type ClientSession } from 'mongoose';
+import type { Connection, ClientSession } from 'mongoose';
 import type { IUnitOfWorkCierreConsultaPort } from '../../../application/ports/unit-of-work-cierre-consulta.port.js';
 import {
   CONSULTA_ODONTOLOGICA_REPOSITORY,
