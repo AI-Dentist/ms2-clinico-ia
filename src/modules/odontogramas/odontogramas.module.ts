@@ -72,13 +72,11 @@ const USE_CASES = [
       provide: CONSULTA_ODONTOLOGICA_CONTEXT_PORT,
       useClass: LocalConsultaOdontologicaContextAdapter,
     },
-    MockOdontologoContextAdapter,
     KeycloakJwtOdontologoContextAdapter,
     {
       provide: ODONTOLOGO_CONTEXT_PORT,
       useFactory: (
         keycloakAdapter: KeycloakJwtOdontologoContextAdapter,
-        mockAdapter: MockOdontologoContextAdapter,
         configService?: ConfigService,
       ) => {
         const mode =
@@ -94,11 +92,10 @@ const USE_CASES = [
             `CRÍTICO: MockOdontologoContextAdapter deshabilitado por política de seguridad. Solo está permitido en entornos 'development' o 'test' (entorno actual: '${env || 'no configurado'}').`,
           );
         }
-        return mockAdapter;
+        return new MockOdontologoContextAdapter();
       },
       inject: [
         KeycloakJwtOdontologoContextAdapter,
-        MockOdontologoContextAdapter,
         { token: ConfigService, optional: true },
       ],
     },

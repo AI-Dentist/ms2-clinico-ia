@@ -7,6 +7,9 @@ import { PACIENTE_VALIDATOR_PORT } from './domain/ports/paciente-validator.port.
 import { MockPacienteValidatorAdapter } from './infrastructure/adapters/mock-paciente-validator.adapter.js';
 import { GraphqlMs1PacienteValidatorAdapter } from './infrastructure/adapters/graphql-ms1-paciente-validator.adapter.js';
 import { HistoriaClinicaDocument } from './infrastructure/persistence/mongo/schemas/historia-clinica.schema.js';
+import { ODONTOLOGO_CONTEXT_PORT } from './domain/ports/odontologo-context.port.js';
+import { MockOdontologoContextAdapter } from './infrastructure/adapters/mock-odontologo-context.adapter.js';
+import { KeycloakJwtOdontologoContextAdapter } from '../../infrastructure/auth/keycloak-jwt-odontologo-context.adapter.js';
 
 describe('HistoriasClinicasModule - Selección de Validador de Pacientes', () => {
   const mockMongooseModel = {
@@ -71,6 +74,74 @@ describe('HistoriasClinicasModule - Selección de Validador de Pacientes', () =>
 
     const validator = moduleRef.get(PACIENTE_VALIDATOR_PORT);
     expect(validator).toBeInstanceOf(MockPacienteValidatorAdapter);
+  });
+
+  describe('Selección de Contexto de Odontólogo (ODONTOLOGO_CONTEXT_PORT)', () => {
+    const originalEnv = process.env.NODE_ENV;
+    const originalAdapter = process.env.ODONTOLOGO_AUTH_ADAPTER;
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalEnv;
+      if (originalAdapter !== undefined) {
+        process.env.ODONTOLOGO_AUTH_ADAPTER = originalAdapter;
+      } else {
+        delete process.env.ODONTOLOGO_AUTH_ADAPTER;
+      }
+    });
+
+    it.each([undefined, 'keycloak'])(
+      '10a. Debe resolver KeycloakJwtOdontologoContextAdapter en production con adapter=%s',
+      async (adapter) => {
+        process.env.NODE_ENV = 'production';
+        if (adapter) process.env.ODONTOLOGO_AUTH_ADAPTER = adapter;
+        else delete process.env.ODONTOLOGO_AUTH_ADAPTER;
+
+        const moduleRef = await Test.createTestingModule({
+          imports: [HistoriasClinicasModule],
+        })
+          .overrideProvider(getModelToken(HistoriaClinicaDocument.name))
+          .useValue(mockMongooseModel)
+          .compile();
+
+        const port = moduleRef.get(ODONTOLOGO_CONTEXT_PORT);
+        expect(port).toBeInstanceOf(KeycloakJwtOdontologoContextAdapter);
+      },
+    );
+
+    it.each(['production', 'staging', undefined])(
+      '10b. Debe rechazar mock en entornos no autorizados (NODE_ENV=%s)',
+      async (env) => {
+        process.env.ODONTOLOGO_AUTH_ADAPTER = 'mock';
+        if (env) process.env.NODE_ENV = env;
+        else delete process.env.NODE_ENV;
+
+        await expect(
+          Test.createTestingModule({
+            imports: [HistoriasClinicasModule],
+          })
+            .overrideProvider(getModelToken(HistoriaClinicaDocument.name))
+            .useValue(mockMongooseModel)
+            .compile(),
+        ).rejects.toThrow(/CRÍTICO: MockOdontologoContextAdapter deshabilitado por política de seguridad/);
+      },
+    );
+
+    it.each(['development', 'test'])(
+      '10c. Debe permitir mock en desarrollo y test (NODE_ENV=%s)',
+      async (env) => {
+        process.env.ODONTOLOGO_AUTH_ADAPTER = 'mock';
+        process.env.NODE_ENV = env;
+
+        const moduleRef = await Test.createTestingModule({
+          imports: [HistoriasClinicasModule],
+        })
+          .overrideProvider(getModelToken(HistoriaClinicaDocument.name))
+          .useValue(mockMongooseModel)
+          .compile();
+
+        expect(moduleRef.get(ODONTOLOGO_CONTEXT_PORT)).toBeInstanceOf(MockOdontologoContextAdapter);
+      },
+    );
   });
 });
 

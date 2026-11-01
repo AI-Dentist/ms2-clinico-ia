@@ -60,6 +60,20 @@ In this microservice architecture, Keycloak manages user identities (`sub: UUID`
 - **Fail-Closed Guarantee**: Missing, null, unlinked, inactive, non-UUID, timeout, network or HTTP/GraphQL errors fail closed immediately (HTTP 401), preventing any write to the clinical repository or transactional outbox.
 - **Historical Record Limitation**: Historical records created prior to this integration retain their immutable stored values; existing documents are not migrated or rewritten. Newly opened consultations strictly enforce and store the canonical practitioner UUID.
 
+## Doctor Context Provider Wiring & Lazy Secure Resolution
+
+In clinical modules (`OdontogramasModule`, `ConsultasOdontologicasModule`, `HistoriasClinicasModule`, and `EstudiosModule`), the practitioner identity context port (`ODONTOLOGO_CONTEXT_PORT`) dynamically selects the concrete adapter based on `ODONTOLOGO_AUTH_ADAPTER`:
+
+- **Production Mode (`ODONTOLOGO_AUTH_ADAPTER=keycloak`)**:
+  - Resolves strictly to `KeycloakJwtOdontologoContextAdapter`.
+  - **Lazy Wiring**: The synthetic `MockOdontologoContextAdapter` is **never** registered in Nest DI `providers` or `inject` arrays, ensuring Nest DI never constructs the mock class or triggers its security environment checks during application startup.
+- **Unset Adapter Defaults**:
+  - `ConsultasOdontologicasModule`, `HistoriasClinicasModule`, and `EstudiosModule` default to `'keycloak'` when unset, safely resolving Keycloak in production.
+  - `OdontogramasModule` retains a different unset-adapter behavior: it requires explicit `ODONTOLOGO_AUTH_ADAPTER=keycloak`; when unset, it routes to mock resolution which fails closed in non-development environments.
+- **Development & Testing Mode (`ODONTOLOGO_AUTH_ADAPTER=mock`)**:
+  - Lazily instantiates `MockOdontologoContextAdapter` only after verifying `NODE_ENV` is explicitly `'development'` or `'test'`.
+  - In `production`, `staging`, or unconfigured (`undefined`) environments, any attempt to select the mock fails closed immediately with `CRÍTICO: MockOdontologoContextAdapter deshabilitado por política de seguridad`.
+
 ## Appointment Validation & Rescheduled Appointments (MS3 Integration - S4)
 
 In coordination with MS3 (Agendamiento & Stock):

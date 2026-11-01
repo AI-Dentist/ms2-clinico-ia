@@ -22,6 +22,7 @@ import { ODONTOLOGO_CONTEXT_PORT } from './application/ports/odontologo-context.
 import { LocalHistoriaClinicaContextAdapter } from './infrastructure/adapters/local-historia-clinica-context.adapter.js';
 import { LocalConsultaOdontologicaContextAdapter } from './infrastructure/adapters/local-consulta-odontologica-context.adapter.js';
 import { MockOdontologoContextAdapter } from './infrastructure/adapters/mock-odontologo-context.adapter.js';
+import { KeycloakJwtOdontologoContextAdapter } from '../../infrastructure/auth/keycloak-jwt-odontologo-context.adapter.js';
 
 // Reused Port Tokens
 import { HISTORIA_CLINICA_REPOSITORY } from '../historias-clinicas/domain/ports/historia-clinica.repository.port.js';
@@ -279,6 +280,14 @@ describe('OdontogramasModule (NestJS DI & Integration Unit Tests)', () => {
       process.env.NODE_ENV = 'development';
       const moduleDev = await crearModuloPrueba();
       expect(moduleDev.get(ODONTOLOGO_CONTEXT_PORT)).toBeInstanceOf(MockOdontologoContextAdapter);
+    });
+
+    it('13. debe resolver KeycloakJwtOdontologoContextAdapter en production cuando ODONTOLOGO_AUTH_ADAPTER=keycloak sin construir el Mock', async () => {
+      process.env.NODE_ENV = 'production';
+      process.env.ODONTOLOGO_AUTH_ADAPTER = 'keycloak';
+      const moduleRef = await crearModuloPrueba();
+      const odontologoPort = moduleRef.get(ODONTOLOGO_CONTEXT_PORT);
+      expect(odontologoPort).toBeInstanceOf(KeycloakJwtOdontologoContextAdapter);
     });
   });
 });
