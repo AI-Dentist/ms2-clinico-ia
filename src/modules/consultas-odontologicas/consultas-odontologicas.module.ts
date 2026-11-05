@@ -5,10 +5,6 @@ import {
   ConsultaOdontologicaDocument,
   ConsultaOdontologicaSchema,
 } from './infrastructure/persistence/mongo/schemas/consulta-odontologica.schema.js';
-import {
-  InboxEvent,
-  InboxEventSchema,
-} from './infrastructure/persistence/mongo/schemas/inbox-event.schema.js';
 import { MongoConsultaOdontologicaRepository } from './infrastructure/persistence/mongo/repositories/mongo-consulta-odontologica.repository.js';
 import { MongoInboxRepository } from './infrastructure/persistence/mongo/repositories/mongo-inbox.repository.js';
 import { LocalHistoriaClinicaContextAdapter } from './infrastructure/adapters/local-historia-clinica-context.adapter.js';

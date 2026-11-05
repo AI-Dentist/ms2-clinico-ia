@@ -15,7 +15,7 @@ export class MongoInboxRepository implements IInboxRepositoryPort {
     if (typeof connection?.model === 'function') {
       this.model =
         connection.models?.[InboxEvent.name] ??
-        connection.model<InboxEventDocument>(InboxEvent.name, InboxEventSchema);
+        connection.model<InboxEventDocument>(InboxEvent.name, InboxEventSchema as any);
     } else {
       this.model = (connection?.models?.[InboxEvent.name] ?? {}) as Model<InboxEventDocument>;
     }
