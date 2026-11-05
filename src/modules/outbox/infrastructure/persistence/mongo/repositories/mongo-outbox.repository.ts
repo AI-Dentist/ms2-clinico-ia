@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, type ClientSession } from 'mongoose';
-import type { IOutboxRepositoryPort } from '../../../../domain/ports/outbox-repository.port.js';
+import type {
+  IOutboxRepositoryPort,
+  OutboxStatusDto,
+} from '../../../../domain/ports/outbox-repository.port.js';
 import { OutboxEvent } from '../../../../domain/entities/outbox-event.entity.js';
 import { OutboxEventDocument } from '../schemas/outbox-event.schema.js';
 
@@ -115,6 +118,36 @@ export class MongoOutboxRepository implements IOutboxRepositoryPort {
       .exec();
 
     return resultado.modifiedCount;
+  }
+
+  async obtenerEstado(): Promise<OutboxStatusDto> {
+    const [pendientes, enProceso, publicados, fatales, eventosFatalesDocs] = await Promise.all([
+      this.model.countDocuments({ status: 'PENDIENTE' }).exec(),
+      this.model.countDocuments({ status: 'EN_PROCESO' }).exec(),
+      this.model.countDocuments({ status: 'PUBLICADO' }).exec(),
+      this.model.countDocuments({ status: 'ERROR_FATAL' }).exec(),
+      this.model
+        .find({ status: 'ERROR_FATAL' })
+        .sort({ actualizadoEn: -1 })
+        .limit(20)
+        .lean()
+        .exec(),
+    ]);
+
+    return {
+      pendientes,
+      enProceso,
+      publicados,
+      fatales,
+      eventosFatales: eventosFatalesDocs.map((doc) => ({
+        id: doc._id,
+        aggregateId: doc.aggregateId,
+        attempts: doc.attempts,
+        maxAttempts: doc.maxAttempts,
+        lastError: doc.lastError,
+        actualizadoEn: doc.actualizadoEn,
+      })),
+    };
   }
 
   private toPersistence(evento: OutboxEvent): OutboxEventDocument {

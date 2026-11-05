@@ -171,6 +171,8 @@ describe('OutboxRelayWorker', () => {
     mockRepository.reclamarLote.mockResolvedValue([evento]);
     mockPublisher.publicar.mockRejectedValue(new Error('Mensaje no enrutable (NO_ROUTE)'));
 
+    const errorSpy = vi.spyOn((worker as any).logger, 'error');
+
     const publicados = await worker.procesarLotePendientes();
 
     expect(publicados).toBe(0);
@@ -178,5 +180,13 @@ describe('OutboxRelayWorker', () => {
     expect(evento.attempts).toBe(1);
     expect(evento.lastError).toBe('Mensaje no enrutable (NO_ROUTE)');
     expect(mockRepository.actualizar).toHaveBeenCalledWith(evento);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('ERROR_FATAL'),
+        eventId: evento.id,
+        attempts: 1,
+        maxAttempts: 1,
+      }),
+    );
   });
 });

@@ -11,6 +11,7 @@ import { MockRabbitMqPublisherAdapter } from './infrastructure/messaging/mock-ra
 import { AmqpRabbitMqPublisherAdapter } from './infrastructure/messaging/amqp-rabbitmq-publisher.adapter.js';
 import { RABBITMQ_PUBLISHER_PORT } from './domain/ports/rabbitmq-publisher.port.js';
 import { OutboxRelayWorker } from './infrastructure/workers/outbox-relay.worker.js';
+import { OutboxController } from './infrastructure/http/outbox.controller.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { OutboxRelayWorker } from './infrastructure/workers/outbox-relay.worker.
       { name: OutboxEventDocument.name, schema: OutboxEventSchema },
     ]),
   ],
+  controllers: [OutboxController],
   providers: [
     MongoOutboxRepository,
     {

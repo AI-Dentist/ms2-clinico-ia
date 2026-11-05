@@ -3,6 +3,23 @@ import type { OutboxEvent } from '../entities/outbox-event.entity.js';
 
 export const OUTBOX_REPOSITORY_PORT = Symbol('OUTBOX_REPOSITORY_PORT');
 
+export interface EventoFatalItem {
+  id: string;
+  aggregateId: string;
+  attempts: number;
+  maxAttempts: number;
+  lastError: string | null;
+  actualizadoEn: Date;
+}
+
+export interface OutboxStatusDto {
+  pendientes: number;
+  enProceso: number;
+  publicados: number;
+  fatales: number;
+  eventosFatales: EventoFatalItem[];
+}
+
 export interface IOutboxRepositoryPort {
   /**
    * Persiste un nuevo evento en el outbox.
@@ -41,5 +58,11 @@ export interface IOutboxRepositoryPort {
    * Reclama y libera locks cuyo lease haya expirado (recuperación de trabajadores caídos).
    */
   liberarLeasesVencidos(ahora?: Date): Promise<number>;
+
+  /**
+   * Obtiene métricas agregadas del estado de los eventos en el outbox y lista
+   * de eventos que se encuentran en estado terminal ERROR_FATAL.
+   */
+  obtenerEstado(): Promise<OutboxStatusDto>;
 }
 

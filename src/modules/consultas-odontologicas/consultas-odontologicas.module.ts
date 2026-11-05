@@ -32,6 +32,7 @@ import { MongoUnitOfWorkCierreConsultaAdapter } from './infrastructure/persisten
 import { INBOX_REPOSITORY_PORT } from './application/ports/inbox-repository.port.js';
 import { UNIT_OF_WORK_COMPENSACION_PORT } from './application/ports/unit-of-work-compensacion.port.js';
 import { MongoUnitOfWorkCompensacionAdapter } from './infrastructure/persistence/mongo/mongo-unit-of-work-compensacion.adapter.js';
+import { FacturacionRechazadaConsumer } from './infrastructure/messaging/facturacion-rechazada.consumer.js';
 
 // Casos de uso de la capa Application
 import {
@@ -172,12 +173,14 @@ const USE_CASES = [
       provide: UNIT_OF_WORK_COMPENSACION_PORT,
       useClass: MongoUnitOfWorkCompensacionAdapter,
     },
+    FacturacionRechazadaConsumer,
     ...USE_CASES,
   ],
   exports: [
     CONSULTA_ODONTOLOGICA_REPOSITORY,
     INBOX_REPOSITORY_PORT,
     UNIT_OF_WORK_COMPENSACION_PORT,
+    FacturacionRechazadaConsumer,
     CATALOGO_SERVICIOS_PORT,
     UNIT_OF_WORK_CIERRE_CONSULTA_PORT,
     MockCatalogoServiciosAdapter,

@@ -192,8 +192,22 @@ export class OutboxRelayWorker
             `[OutboxRelayWorker] Fallo al publicar evento outbox ${evento.id}: ${mensajeError}`,
           );
 
-          evento.registrarFallo(this.workerId, mensajeError);
+          evento.registrarFallo(this.workerId, mensajeError, new Date(), this.maxAttempts);
           await this.repository.actualizar(evento);
+
+          if (evento.status === 'ERROR_FATAL') {
+            this.logger.error({
+              message:
+                '[OutboxRelayWorker] Evento outbox alcanzó estado terminal ERROR_FATAL',
+              eventId: evento.id,
+              aggregateId: evento.aggregateId,
+              aggregateType: evento.aggregateType,
+              eventType: evento.eventType,
+              attempts: evento.attempts,
+              maxAttempts: this.maxAttempts,
+              lastError: mensajeError,
+            });
+          }
         }
       }
     } finally {
