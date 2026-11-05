@@ -52,6 +52,12 @@ export interface EvolucionSOAPDto {
   plan: string | null;
 }
 
+export interface RechazoFacturacionDto {
+  motivoCodigo: string;
+  motivo: string;
+  rechazadaEn: string;
+}
+
 /**
  * Data Transfer Object que representa la respuesta completa e inmutable
  * de una consulta odontológica hacia los clientes y capas externas.
@@ -78,6 +84,7 @@ export interface ConsultaOdontologicaResponseDto {
   evolucionSOAP: EvolucionSOAPDto;
   recomendaciones: string | null;
   motivoCancelacion: string | null;
+  rechazoFacturacion: RechazoFacturacionDto | null;
   version: number;
   creadoEn: string;
   actualizadoEn: string;

@@ -69,6 +69,13 @@ export class ConsultaOdontologicaMapper {
       },
       recomendaciones: consulta.recomendaciones,
       motivoCancelacion: consulta.motivoCancelacion,
+      rechazoFacturacion: consulta.rechazoFacturacion
+        ? {
+            motivoCodigo: consulta.rechazoFacturacion.motivoCodigo,
+            motivo: consulta.rechazoFacturacion.motivo,
+            rechazadaEn: consulta.rechazoFacturacion.rechazadaEn.toISOString(),
+          }
+        : null,
       version: consulta.version,
       creadoEn: consulta.creadoEn.toISOString(),
       actualizadoEn: consulta.actualizadoEn.toISOString(),

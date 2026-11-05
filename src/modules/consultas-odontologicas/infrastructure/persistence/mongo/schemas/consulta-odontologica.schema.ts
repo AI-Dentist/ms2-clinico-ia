@@ -28,6 +28,10 @@ import {
   EvolucionSOAPDocument,
   EvolucionSOAPSchema,
 } from './evolucion-soap.schema.js';
+import {
+  RechazoFacturacionDocument,
+  RechazoFacturacionSchema,
+} from './rechazo-facturacion.schema.js';
 
 @Schema({
   collection: 'consultas_odontologicas',
@@ -100,6 +104,12 @@ export class ConsultaOdontologicaDocument {
 
   @Prop({ type: String, default: null })
   motivoCancelacion: string | null;
+
+  @Prop({ type: String, default: null })
+  ultimoOutboxEventId: string | null;
+
+  @Prop({ type: RechazoFacturacionSchema, default: null })
+  rechazoFacturacion: RechazoFacturacionDocument | null;
 
   @Prop({ type: Number, required: true, default: 1 })
   version: number;

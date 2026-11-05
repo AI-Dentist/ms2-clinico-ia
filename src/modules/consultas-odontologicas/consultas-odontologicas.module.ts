@@ -5,7 +5,12 @@ import {
   ConsultaOdontologicaDocument,
   ConsultaOdontologicaSchema,
 } from './infrastructure/persistence/mongo/schemas/consulta-odontologica.schema.js';
+import {
+  InboxEvent,
+  InboxEventSchema,
+} from './infrastructure/persistence/mongo/schemas/inbox-event.schema.js';
 import { MongoConsultaOdontologicaRepository } from './infrastructure/persistence/mongo/repositories/mongo-consulta-odontologica.repository.js';
+import { MongoInboxRepository } from './infrastructure/persistence/mongo/repositories/mongo-inbox.repository.js';
 import { LocalHistoriaClinicaContextAdapter } from './infrastructure/adapters/local-historia-clinica-context.adapter.js';
 import { MockCitaValidatorAdapter } from './infrastructure/adapters/mock-cita-validator.adapter.js';
 import { HttpMs3CitaValidatorAdapter } from './infrastructure/adapters/http-ms3-cita-validator.adapter.js';
@@ -24,6 +29,9 @@ import { ODONTOLOGO_CONTEXT_PORT } from './domain/ports/odontologo-context.port.
 import { CATALOGO_SERVICIOS_PORT } from './application/ports/catalogo-servicios.port.js';
 import { UNIT_OF_WORK_CIERRE_CONSULTA_PORT } from './application/ports/unit-of-work-cierre-consulta.port.js';
 import { MongoUnitOfWorkCierreConsultaAdapter } from './infrastructure/persistence/mongo/unit-of-work-cierre-consulta.adapter.js';
+import { INBOX_REPOSITORY_PORT } from './application/ports/inbox-repository.port.js';
+import { UNIT_OF_WORK_COMPENSACION_PORT } from './application/ports/unit-of-work-compensacion.port.js';
+import { MongoUnitOfWorkCompensacionAdapter } from './infrastructure/persistence/mongo/mongo-unit-of-work-compensacion.adapter.js';
 
 // Casos de uso de la capa Application
 import {
@@ -34,6 +42,7 @@ import {
   CompletarConsultaUseCase,
   CancelarConsultaUseCase,
   ConsultarCatalogoServiciosUseCase,
+  RevertirCierrePorRechazoUseCase,
 } from './application/index.js';
 
 import { ConsultasOdontologicasController } from './infrastructure/http/controllers/consultas-odontologicas.controller.js';
@@ -47,6 +56,7 @@ const USE_CASES = [
   CompletarConsultaUseCase,
   CancelarConsultaUseCase,
   ConsultarCatalogoServiciosUseCase,
+  RevertirCierrePorRechazoUseCase,
 ];
 
 @Module({
@@ -55,6 +65,7 @@ const USE_CASES = [
     AuthModule,
     MongooseModule.forFeature([
       { name: ConsultaOdontologicaDocument.name, schema: ConsultaOdontologicaSchema },
+      { name: InboxEvent.name, schema: InboxEventSchema },
     ]),
     HistoriasClinicasModule,
     OutboxModule,
@@ -153,10 +164,20 @@ const USE_CASES = [
       provide: UNIT_OF_WORK_CIERRE_CONSULTA_PORT,
       useClass: MongoUnitOfWorkCierreConsultaAdapter,
     },
+    {
+      provide: INBOX_REPOSITORY_PORT,
+      useClass: MongoInboxRepository,
+    },
+    {
+      provide: UNIT_OF_WORK_COMPENSACION_PORT,
+      useClass: MongoUnitOfWorkCompensacionAdapter,
+    },
     ...USE_CASES,
   ],
   exports: [
     CONSULTA_ODONTOLOGICA_REPOSITORY,
+    INBOX_REPOSITORY_PORT,
+    UNIT_OF_WORK_COMPENSACION_PORT,
     CATALOGO_SERVICIOS_PORT,
     UNIT_OF_WORK_CIERRE_CONSULTA_PORT,
     MockCatalogoServiciosAdapter,

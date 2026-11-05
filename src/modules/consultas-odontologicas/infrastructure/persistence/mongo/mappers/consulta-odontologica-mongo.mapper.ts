@@ -77,6 +77,14 @@ export class ConsultaOdontologicaMongoMapper {
       },
       recomendaciones: consulta.recomendaciones,
       motivoCancelacion: consulta.motivoCancelacion,
+      ultimoOutboxEventId: consulta.ultimoOutboxEventId,
+      rechazoFacturacion: consulta.rechazoFacturacion
+        ? {
+            motivoCodigo: consulta.rechazoFacturacion.motivoCodigo,
+            motivo: consulta.rechazoFacturacion.motivo,
+            rechazadaEn: consulta.rechazoFacturacion.rechazadaEn,
+          }
+        : null,
       version: consulta.version,
       creadoEn: consulta.creadoEn,
       actualizadoEn: consulta.actualizadoEn,
@@ -163,6 +171,14 @@ export class ConsultaOdontologicaMongoMapper {
       }),
       recomendaciones: doc.recomendaciones ?? null,
       motivoCancelacion: doc.motivoCancelacion ?? null,
+      ultimoOutboxEventId: doc.ultimoOutboxEventId ?? null,
+      rechazoFacturacion: doc.rechazoFacturacion
+        ? {
+            motivoCodigo: doc.rechazoFacturacion.motivoCodigo,
+            motivo: doc.rechazoFacturacion.motivo,
+            rechazadaEn: doc.rechazoFacturacion.rechazadaEn,
+          }
+        : null,
       version: doc.version,
       creadoEn: doc.creadoEn,
       actualizadoEn: doc.actualizadoEn,
