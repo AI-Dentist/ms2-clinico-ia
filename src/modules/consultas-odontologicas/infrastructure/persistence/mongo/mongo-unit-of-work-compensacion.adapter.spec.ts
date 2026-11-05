@@ -4,12 +4,17 @@ import { MongoUnitOfWorkCompensacionAdapter } from './mongo-unit-of-work-compens
 
 describe('MongoUnitOfWorkCompensacionAdapter', () => {
   it('ejecuta la operacion dentro de una transaccion cuando el cluster soporta transacciones', async () => {
+    const withTransactionMock = vi.fn(async (cb: (s: ClientSession) => Promise<any>) => {
+      return await cb(mockSession as unknown as ClientSession);
+    });
+    const endSessionMock = vi.fn().mockResolvedValue(undefined);
+
     const mockSession = {
-      withTransaction: vi.fn(async (cb: (s: ClientSession) => Promise<any>) => {
-        return await cb(mockSession as unknown as ClientSession);
-      }),
-      endSession: vi.fn().mockResolvedValue(undefined),
+      withTransaction: withTransactionMock,
+      endSession: endSessionMock,
     } as unknown as ClientSession;
+
+    const startSessionMock = vi.fn().mockResolvedValue(mockSession);
 
     const mockConnection = {
       getClient: vi.fn().mockReturnValue({
@@ -20,7 +25,7 @@ describe('MongoUnitOfWorkCompensacionAdapter', () => {
           },
         },
       }),
-      startSession: vi.fn().mockResolvedValue(mockSession),
+      startSession: startSessionMock,
     } as unknown as Connection;
 
     const adapter = new MongoUnitOfWorkCompensacionAdapter(mockConnection);
@@ -32,12 +37,13 @@ describe('MongoUnitOfWorkCompensacionAdapter', () => {
     });
 
     expect(ejecutado).toBe(true);
-    expect(mockConnection.startSession).toHaveBeenCalled();
-    expect(mockSession.withTransaction).toHaveBeenCalled();
-    expect(mockSession.endSession).toHaveBeenCalled();
+    expect(startSessionMock).toHaveBeenCalled();
+    expect(withTransactionMock).toHaveBeenCalled();
+    expect(endSessionMock).toHaveBeenCalled();
   });
 
   it('ejecuta la operacion sin transaccion en standalone cuando topology es Single sin replica set', async () => {
+    const startSessionMock = vi.fn();
     const mockConnection = {
       getClient: vi.fn().mockReturnValue({
         topology: {
@@ -46,7 +52,7 @@ describe('MongoUnitOfWorkCompensacionAdapter', () => {
           },
         },
       }),
-      startSession: vi.fn(),
+      startSession: startSessionMock,
     } as unknown as Connection;
 
     const adapter = new MongoUnitOfWorkCompensacionAdapter(mockConnection);
@@ -59,6 +65,6 @@ describe('MongoUnitOfWorkCompensacionAdapter', () => {
     });
 
     expect(ejecutado).toBe(true);
-    expect(mockConnection.startSession).not.toHaveBeenCalled();
+    expect(startSessionMock).not.toHaveBeenCalled();
   });
 });

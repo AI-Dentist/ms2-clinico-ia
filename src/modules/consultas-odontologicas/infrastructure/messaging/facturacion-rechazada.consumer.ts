@@ -281,7 +281,7 @@ export class FacturacionRechazadaConsumer
     }
 
     if (typeof p.motivoCodigo !== 'string' || !MOTIVOS_VALIDOS.has(p.motivoCodigo)) {
-      return `Campo 'motivoCodigo' inválido (${p.motivoCodigo})`;
+      return `Campo 'motivoCodigo' inválido (${String(p.motivoCodigo)})`;
     }
 
     if (

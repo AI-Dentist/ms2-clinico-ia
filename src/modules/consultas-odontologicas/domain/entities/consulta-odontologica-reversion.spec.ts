@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { ConsultaOdontologica } from './consulta-odontologica.entity.js';
 import { ConsultaId } from '../value-objects/consulta-id.vo.js';
 import { HistoriaClinicaId } from '../value-objects/historia-clinica-id.vo.js';

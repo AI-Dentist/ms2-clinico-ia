@@ -20,7 +20,7 @@ export interface RevertirCierrePorRechazoCommand {
   consultaFinalizadaEventId: string;
   motivoCodigo: string;
   motivo: string;
-  rechazadaEn: string;
+  rechazadaEn: string | Date;
 }
 
 export interface RevertirCierreResultado {
@@ -124,7 +124,10 @@ export class RevertirCierrePorRechazoUseCase {
       }
 
       // 5. Revertir en el Aggregate Root (COMPLETADA -> EN_CURSO) preservando todo lo clínico
-      const rechazadaEn = new Date(command.rechazadaEn);
+      const rechazadaEn =
+        command.rechazadaEn instanceof Date
+          ? command.rechazadaEn
+          : new Date(command.rechazadaEn);
       consulta.revertirCierrePorRechazoFacturacion({
         motivoCodigo: command.motivoCodigo,
         motivo: command.motivo,

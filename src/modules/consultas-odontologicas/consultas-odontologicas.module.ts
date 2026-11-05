@@ -66,7 +66,6 @@ const USE_CASES = [
     AuthModule,
     MongooseModule.forFeature([
       { name: ConsultaOdontologicaDocument.name, schema: ConsultaOdontologicaSchema },
-      { name: InboxEvent.name, schema: InboxEventSchema },
     ]),
     HistoriasClinicasModule,
     OutboxModule,

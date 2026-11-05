@@ -1,21 +1,32 @@
 import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import type { Model, ClientSession } from 'mongoose';
+import { InjectConnection } from '@nestjs/mongoose';
+import type { Model, ClientSession, Connection } from 'mongoose';
 import type {
   IInboxRepositoryPort,
   InboxEventItem,
-} from '../../../application/ports/inbox-repository.port.js';
-import { InboxEvent, type InboxEventDocument } from '../schemas/inbox-event.schema.js';
+} from '../../../../application/ports/inbox-repository.port.js';
+import { InboxEvent, InboxEventSchema, type InboxEventDocument } from '../schemas/inbox-event.schema.js';
 
 @Injectable()
 export class MongoInboxRepository implements IInboxRepositoryPort {
-  constructor(
-    @InjectModel(InboxEvent.name)
-    private readonly inboxModel: Model<InboxEventDocument>,
-  ) {}
+  private readonly model: Model<InboxEventDocument>;
+
+  constructor(@InjectConnection() connection: Connection) {
+    if (typeof connection?.model === 'function') {
+      this.model =
+        connection.models?.[InboxEvent.name] ??
+        connection.model<InboxEventDocument>(InboxEvent.name, InboxEventSchema);
+    } else {
+      this.model = (connection?.models?.[InboxEvent.name] ?? {}) as Model<InboxEventDocument>;
+    }
+  }
 
   async existe(eventId: string, session?: ClientSession): Promise<boolean> {
-    const doc = await this.inboxModel
+    if (!this.model?.findOne) {
+      return false;
+    }
+
+    const doc = await this.model
       .findOne({ eventId })
       .session(session ?? null)
       .lean();
@@ -24,7 +35,11 @@ export class MongoInboxRepository implements IInboxRepositoryPort {
   }
 
   async guardar(inboxEvent: InboxEventItem, session?: ClientSession): Promise<void> {
-    await this.inboxModel.create(
+    if (!this.model?.create) {
+      return;
+    }
+
+    await this.model.create(
       [
         {
           eventId: inboxEvent.eventId,

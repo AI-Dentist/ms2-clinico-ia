@@ -1,35 +1,47 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { Model } from 'mongoose';
+import type { Connection, Model } from 'mongoose';
 import { MongoInboxRepository } from './mongo-inbox.repository.js';
 import type { InboxEventDocument } from '../schemas/inbox-event.schema.js';
 
 describe('MongoInboxRepository', () => {
   it('existe() debe retornar true si el evento ya existe en la colección inbox', async () => {
-    const mockModel = {
-      findOne: vi.fn().mockReturnValue({
-        session: vi.fn().mockReturnValue({
-          lean: vi.fn().mockResolvedValue({ eventId: 'evt-123' }),
-        }),
+    const findOneMock = vi.fn().mockReturnValue({
+      session: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue({ eventId: 'evt-123' }),
       }),
+    });
+    const mockModel = {
+      findOne: findOneMock,
     } as unknown as Model<InboxEventDocument>;
 
-    const repo = new MongoInboxRepository(mockModel);
+    const mockConnection = {
+      model: vi.fn().mockReturnValue(mockModel),
+      models: {},
+    } as unknown as Connection;
+
+    const repo = new MongoInboxRepository(mockConnection);
     const existe = await repo.existe('evt-123');
 
     expect(existe).toBe(true);
-    expect(mockModel.findOne).toHaveBeenCalledWith({ eventId: 'evt-123' });
+    expect(findOneMock).toHaveBeenCalledWith({ eventId: 'evt-123' });
   });
 
   it('existe() debe retornar false si el evento no existe', async () => {
-    const mockModel = {
-      findOne: vi.fn().mockReturnValue({
-        session: vi.fn().mockReturnValue({
-          lean: vi.fn().mockResolvedValue(null),
-        }),
+    const findOneMock = vi.fn().mockReturnValue({
+      session: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue(null),
       }),
+    });
+    const mockModel = {
+      findOne: findOneMock,
     } as unknown as Model<InboxEventDocument>;
 
-    const repo = new MongoInboxRepository(mockModel);
+    const mockConnection = {
+      model: vi.fn().mockReturnValue(mockModel),
+      models: {},
+    } as unknown as Connection;
+
+    const repo = new MongoInboxRepository(mockConnection);
     const existe = await repo.existe('evt-nonexistent');
 
     expect(existe).toBe(false);
@@ -41,7 +53,12 @@ describe('MongoInboxRepository', () => {
       create: mockCreate,
     } as unknown as Model<InboxEventDocument>;
 
-    const repo = new MongoInboxRepository(mockModel);
+    const mockConnection = {
+      model: vi.fn().mockReturnValue(mockModel),
+      models: {},
+    } as unknown as Connection;
+
+    const repo = new MongoInboxRepository(mockConnection);
     const mockSession = {} as any;
 
     await repo.guardar(

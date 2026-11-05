@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { ConsultaOdontologicaMongoMapper } from './consulta-odontologica-mongo.mapper.js';
 import { ConsultaOdontologicaMapper } from '../../../../application/mappers/consulta-odontologica.mapper.js';
 import { ConsultaOdontologica } from '../../../../domain/entities/consulta-odontologica.entity.js';
-import { ConsultaId } from '../../../../domain/value-objects/consulta-id.vo.js';
 import { HistoriaClinicaId } from '../../../../domain/value-objects/historia-clinica-id.vo.js';
 import { PacienteId } from '../../../../domain/value-objects/paciente-id.vo.js';
 import { OdontologoId } from '../../../../domain/value-objects/odontologo-id.vo.js';
