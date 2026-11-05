@@ -12,10 +12,13 @@ import { AmqpRabbitMqPublisherAdapter } from './infrastructure/messaging/amqp-ra
 import { RABBITMQ_PUBLISHER_PORT } from './domain/ports/rabbitmq-publisher.port.js';
 import { OutboxRelayWorker } from './infrastructure/workers/outbox-relay.worker.js';
 import { OutboxController } from './infrastructure/http/outbox.controller.js';
+import { AuthModule } from '../../infrastructure/auth/auth.module.js';
+import { OdontologoAuthGuard } from './infrastructure/http/guards/odontologo-auth.guard.js';
 
 @Module({
   imports: [
     ConfigModule,
+    AuthModule,
     MongooseModule.forFeature([
       { name: OutboxEventDocument.name, schema: OutboxEventSchema },
     ]),
@@ -53,6 +56,7 @@ import { OutboxController } from './infrastructure/http/outbox.controller.js';
       ],
     },
     OutboxRelayWorker,
+    OdontologoAuthGuard,
   ],
   exports: [
     OUTBOX_REPOSITORY_PORT,
@@ -60,7 +64,9 @@ import { OutboxController } from './infrastructure/http/outbox.controller.js';
     MockRabbitMqPublisherAdapter,
     AmqpRabbitMqPublisherAdapter,
     OutboxRelayWorker,
+    OdontologoAuthGuard,
   ],
 })
 export class OutboxModule {}
+
 

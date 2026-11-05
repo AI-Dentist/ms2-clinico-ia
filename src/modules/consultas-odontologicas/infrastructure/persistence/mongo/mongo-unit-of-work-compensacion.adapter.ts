@@ -41,14 +41,6 @@ export class MongoUnitOfWorkCompensacionAdapter implements IUnitOfWorkCompensaci
         resultado = await operacion(session);
       });
       return resultado!;
-    } catch (err: unknown) {
-      if (this.esErrorTransaccionNoSoportada(err)) {
-        this.logger.warn(
-          '[MongoUnitOfWorkCompensacionAdapter] Transacción no soportada durante ejecución. Fallback a ejecución directa.',
-        );
-        return await operacion(undefined);
-      }
-      throw err;
     } finally {
       await session.endSession();
     }

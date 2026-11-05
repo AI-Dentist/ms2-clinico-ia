@@ -21,6 +21,10 @@ export interface FacturacionRechazadaConsumerOptions {
   queue?: string;
   dlxExchange?: string;
   dlqQueue?: string;
+  maxRetries?: number;
+  initialBackoffMs?: number;
+  maxBackoffMs?: number;
+  sleepFn?: (ms: number) => Promise<void>;
 }
 
 const UUID_REGEX =
@@ -61,6 +65,10 @@ export class FacturacionRechazadaConsumer
   private readonly queue: string;
   private readonly dlxExchange: string;
   private readonly dlqQueue: string;
+  private readonly maxRetries: number;
+  private readonly initialBackoffMs: number;
+  private readonly maxBackoffMs: number;
+  private readonly sleepFn: (ms: number) => Promise<void>;
 
   constructor(
     private readonly revertirCierrePorRechazoUseCase: RevertirCierrePorRechazoUseCase,
@@ -101,6 +109,37 @@ export class FacturacionRechazadaConsumer
     this.dlqQueue =
       opcionesManuales?.dlqQueue ??
       'ms2.facturacion.consulta.rechazada.dlq';
+
+    const maxRet =
+      opcionesManuales?.maxRetries ??
+      Number(
+        configService?.get<number>('FACTURACION_RECHAZADA_MAX_RETRIES') ??
+          process.env.FACTURACION_RECHAZADA_MAX_RETRIES ??
+          4,
+      );
+    this.maxRetries = maxRet > 0 ? maxRet : 4;
+
+    const initBackoff =
+      opcionesManuales?.initialBackoffMs ??
+      Number(
+        configService?.get<number>('FACTURACION_RECHAZADA_BACKOFF_MS') ??
+          process.env.FACTURACION_RECHAZADA_BACKOFF_MS ??
+          200,
+      );
+    this.initialBackoffMs = initBackoff >= 0 ? initBackoff : 200;
+
+    const maxBack =
+      opcionesManuales?.maxBackoffMs ??
+      Number(
+        configService?.get<number>('FACTURACION_RECHAZADA_MAX_BACKOFF_MS') ??
+          process.env.FACTURACION_RECHAZADA_MAX_BACKOFF_MS ??
+          5000,
+      );
+    this.maxBackoffMs = maxBack >= this.initialBackoffMs ? maxBack : 5000;
+
+    this.sleepFn =
+      opcionesManuales?.sleepFn ??
+      ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
   async onApplicationBootstrap(): Promise<void> {
@@ -237,25 +276,57 @@ export class FacturacionRechazadaConsumer
       return;
     }
 
-    try {
-      const fechaRechazada = new Date(payload.rechazadaEn);
+    let intento = 0;
+    let ultimoError: unknown = null;
 
-      await this.revertirCierrePorRechazoUseCase.execute({
-        eventId: payload.eventId,
-        consultaId: payload.consultaId,
-        consultaFinalizadaEventId: payload.consultaFinalizadaEventId,
-        motivoCodigo: payload.motivoCodigo,
-        motivo: payload.motivo,
-        rechazadaEn: fechaRechazada,
-      });
+    while (intento < this.maxRetries) {
+      intento++;
+      try {
+        const fechaRechazada = new Date(payload.rechazadaEn);
 
-      ch.ack(msg);
-    } catch (err: unknown) {
-      this.logger.error(
-        `[FacturacionRechazadaConsumer] Fallo transitorio al procesar rechazo de consulta '${payload.consultaId}': ${err instanceof Error ? err.message : String(err)}. Reencolando para reintento.`,
-      );
-      ch.nack(msg, false, true);
+        await this.revertirCierrePorRechazoUseCase.execute({
+          eventId: payload.eventId,
+          consultaId: payload.consultaId,
+          consultaFinalizadaEventId: payload.consultaFinalizadaEventId,
+          motivoCodigo: payload.motivoCodigo,
+          motivo: payload.motivo,
+          rechazadaEn: fechaRechazada,
+        });
+
+        ch.ack(msg);
+        return;
+      } catch (err: unknown) {
+        ultimoError = err;
+        const mensajeError = err instanceof Error ? err.message : String(err);
+
+        if (intento < this.maxRetries) {
+          const delayMs = Math.min(
+            this.initialBackoffMs * Math.pow(2, intento - 1),
+            this.maxBackoffMs,
+          );
+          this.logger.warn(
+            `[FacturacionRechazadaConsumer] Reintento transitorio ${intento}/${this.maxRetries} para consulta '${payload.consultaId}' tras error: ${mensajeError}. Esperando ${delayMs}ms...`,
+          );
+          await this.sleepFn(delayMs);
+        }
+      }
     }
+
+    // Reintentos agotados: enviar a DLQ con nack sin requeue y log estructurado
+    const mensajeErrorFinal =
+      ultimoError instanceof Error ? ultimoError.message : String(ultimoError);
+
+    this.logger.error({
+      message:
+        '[FacturacionRechazadaConsumer] Reintentos agotados ante fallo de persistencia/transitorio. Enviando a DLQ.',
+      eventId: payload.eventId,
+      consultaId: payload.consultaId,
+      intentos: intento,
+      maxIntentos: this.maxRetries,
+      error: mensajeErrorFinal,
+    });
+
+    ch.nack(msg, false, false);
   }
 
   private validarPayload(payload: unknown): string | null {

@@ -32,7 +32,7 @@ describe('FacturacionRechazadaConsumer', () => {
     consumer = new FacturacionRechazadaConsumer(
       mockUseCase as unknown as RevertirCierrePorRechazoUseCase,
       undefined,
-      { enabled: false },
+      { enabled: false, initialBackoffMs: 0, maxBackoffMs: 0, sleepFn: vi.fn() },
     );
   });
 
@@ -121,8 +121,11 @@ describe('FacturacionRechazadaConsumer', () => {
     expect(mockUseCase.execute).not.toHaveBeenCalled();
   });
 
-  it('5. Debe permitir reintento (nack con requeue) ante un fallo transitorio no controlado del caso de uso', async () => {
-    mockUseCase.execute.mockRejectedValueOnce(new Error('MongoNetworkTimeoutException'));
+  it('5. Debe reintentar con backoff ante fallo transitorio y hacer ACK si un reintento tiene éxito', async () => {
+    // Falla en el intento 1 pero tiene éxito en el intento 2
+    mockUseCase.execute
+      .mockRejectedValueOnce(new Error('MongoNetworkTimeoutException'))
+      .mockResolvedValueOnce({ revertido: true, motivo: 'EXITO' });
 
     const mockMsg = {
       content: Buffer.from(JSON.stringify(validPayload)),
@@ -132,13 +135,42 @@ describe('FacturacionRechazadaConsumer', () => {
 
     await consumer.procesarMensaje(mockMsg, mockChannel as unknown as Channel);
 
-    expect(mockChannel.nack).toHaveBeenCalledWith(mockMsg, false, true);
-    expect(mockChannel.ack).not.toHaveBeenCalled();
+    expect(mockUseCase.execute).toHaveBeenCalledTimes(2);
+    expect(mockChannel.ack).toHaveBeenCalledWith(mockMsg);
+    expect(mockChannel.nack).not.toHaveBeenCalled();
   });
 
-  it('6. Debe hacer ACK (no DLQ) cuando la consulta no existe o no está completada (manejado por el use case)', async () => {
-    // El caso de uso retorna revertida: false sin lanzar excepción
-    mockUseCase.execute.mockResolvedValueOnce({ revertida: false, motivo: 'CONSULTA_NO_COMPLETADA' });
+  it('6. Debe enviar a DLQ (nack sin requeue) y log estructurado al agotar reintentos por fallo transitorio', async () => {
+    mockUseCase.execute.mockRejectedValue(new Error('MongoClusterUnavailableException'));
+
+    const loggerErrorSpy = vi.spyOn((consumer as any).logger, 'error');
+
+    const mockMsg = {
+      content: Buffer.from(JSON.stringify(validPayload)),
+      properties: {},
+      fields: {},
+    } as unknown as ConsumeMessage;
+
+    await consumer.procesarMensaje(mockMsg, mockChannel as unknown as Channel);
+
+    expect(mockUseCase.execute).toHaveBeenCalledTimes(4); // default 4 intentos
+    expect(mockChannel.nack).toHaveBeenCalledWith(mockMsg, false, false); // DLQ
+    expect(mockChannel.ack).not.toHaveBeenCalled();
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Reintentos agotados'),
+        eventId: validPayload.eventId,
+        consultaId: validPayload.consultaId,
+        intentos: 4,
+        maxIntentos: 4,
+        error: 'MongoClusterUnavailableException',
+      }),
+    );
+  });
+
+  it('7. Debe hacer ACK (no DLQ) cuando la consulta no existe o no está completada (manejado por el use case)', async () => {
+    // El caso de uso retorna revertido: false sin lanzar excepción
+    mockUseCase.execute.mockResolvedValueOnce({ revertido: false, motivo: 'CONSULTA_NO_COMPLETADA' });
 
     const mockMsg = {
       content: Buffer.from(JSON.stringify(validPayload)),
