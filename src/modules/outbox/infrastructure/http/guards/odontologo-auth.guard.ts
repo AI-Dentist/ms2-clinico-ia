@@ -3,10 +3,12 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { KeycloakJwtOdontologoContextAdapter } from '../../../../../infrastructure/auth/keycloak-jwt-odontologo-context.adapter.js';
 import { AutenticacionRequeridaError } from '../../../../../modules/historias-clinicas/application/errors/autenticacion-requerida.error.js';
+import { ServicioIdentidadNoDisponibleError } from '../../../../../infrastructure/auth/servicio-identidad-no-disponible.error.js';
 
 export interface RequestConOperador extends Request {
   operadorToken?: string;
@@ -53,6 +55,12 @@ export class OdontologoAuthGuard implements CanActivate {
       request.odontologoActual = odontologo;
       return true;
     } catch (err: any) {
+      if (err instanceof ServicioIdentidadNoDisponibleError) {
+        throw new ServiceUnavailableException(err.message);
+      }
+      if (err instanceof ServiceUnavailableException) {
+        throw err;
+      }
       if (err instanceof AutenticacionRequeridaError) {
         throw new UnauthorizedException(err.message);
       }

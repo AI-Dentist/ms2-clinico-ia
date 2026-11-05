@@ -28,6 +28,28 @@ export class ConsultaId {
     return new ConsultaId(valor);
   }
 
+  /**
+   * Mapea un UUID canónico (ej. '70000000-0000-4000-a000-000000000001') o un identificador
+   * que ya contiene el prefijo canónico 'cons_' a un ConsultaId válido sin duplicar el prefijo.
+   */
+  static desdeUuidCanonico(valor: string): ConsultaId {
+    const v = valor?.trim();
+    if (!v) {
+      throw new Error('ConsultaId no puede estar vacío.');
+    }
+    if (v.startsWith('cons_')) {
+      return new ConsultaId(v);
+    }
+    const UUID_REGEX =
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    if (!UUID_REGEX.test(v)) {
+      throw new Error(
+        `El valor '${v}' no cumple con el formato UUID RFC 4122 requerido ni con el prefijo canónico 'cons_'.`,
+      );
+    }
+    return new ConsultaId(`cons_${v}`);
+  }
+
   get valor(): string {
     return this._valor;
   }

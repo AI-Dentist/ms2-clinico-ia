@@ -28,6 +28,7 @@ import {
 import { ServicioCatalogoNoEncontradoError } from '../../../../consultas-odontologicas/application/errors/servicio-catalogo-no-encontrado.error.js';
 import { ServicioFacturableInvalidoError } from '../../../../consultas-odontologicas/domain/errors/servicio-facturable-invalido.error.js';
 import { TransaccionesNoSoportadasError } from '../../../../consultas-odontologicas/domain/errors/transacciones-no-soportadas.error.js';
+import { ServicioIdentidadNoDisponibleError } from '../../../../../infrastructure/auth/servicio-identidad-no-disponible.error.js';
 import { ConsultaNoEncontradaError } from '../../../../consultas-odontologicas/domain/errors/consulta-no-encontrada.error.js';
 import { ConflictoConcurrenteConsultaError } from '../../../../consultas-odontologicas/domain/errors/conflicto-concurrente-consulta.error.js';
 import { CitaInvalidaParaConsultaError } from '../../../../consultas-odontologicas/domain/errors/cita-invalida-para-consulta.error.js';
@@ -123,6 +124,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     } else if (exception instanceof CatalogoServiciosNoDisponibleError) {
       status = HttpStatus.SERVICE_UNAVAILABLE;
       title = 'Servicio de catálogo de servicios no disponible';
+      detail = exception.message;
+      type = 'https://api.odontoclinic.local/errors/service-unavailable';
+    } else if (exception instanceof ServicioIdentidadNoDisponibleError) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      title = 'Servicio de identidad no disponible';
       detail = exception.message;
       type = 'https://api.odontoclinic.local/errors/service-unavailable';
     } else if (exception instanceof IdServicioInvalidoError) {
@@ -377,6 +383,10 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         case HttpStatus.UNPROCESSABLE_ENTITY:
           type = 'https://api.odontoclinic.local/errors/validation-error';
           title = 'Entidad no procesable';
+          break;
+        case HttpStatus.SERVICE_UNAVAILABLE:
+          type = 'https://api.odontoclinic.local/errors/service-unavailable';
+          title = 'Servicio no disponible';
           break;
         default:
           type = 'https://api.odontoclinic.local/errors/http-error';

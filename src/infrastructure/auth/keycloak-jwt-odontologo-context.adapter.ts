@@ -9,6 +9,8 @@ import { AutenticacionRequeridaError } from '../../modules/historias-clinicas/ap
 import type { ICanonicalDoctorResolver } from './canonical-doctor-resolver.port.js';
 import { CANONICAL_DOCTOR_RESOLVER } from './canonical-doctor-resolver.port.js';
 import { GraphqlMs1CanonicalDoctorResolverAdapter } from './graphql-ms1-canonical-doctor-resolver.adapter.js';
+import { ServicioIdentidadNoDisponibleError } from './servicio-identidad-no-disponible.error.js';
+import { HttpException } from '@nestjs/common';
 
 export interface KeycloakOdontologoContexto extends OdontologoContexto {
   keycloakSubject?: string;
@@ -219,6 +221,12 @@ export class KeycloakJwtOdontologoContextAdapter implements IOdontologoContextPo
       return contexto;
     } catch (err: any) {
       if (err instanceof AutenticacionRequeridaError) {
+        throw err;
+      }
+      if (err instanceof ServicioIdentidadNoDisponibleError) {
+        throw err;
+      }
+      if (err instanceof HttpException) {
         throw err;
       }
       this.logger.warn(`Fallo de verificación de token JWT: ${err.message}`);

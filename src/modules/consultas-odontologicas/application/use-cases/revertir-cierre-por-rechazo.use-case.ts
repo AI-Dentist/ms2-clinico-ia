@@ -60,9 +60,16 @@ export class RevertirCierrePorRechazoUseCase {
       // 2. Buscar la consulta clínica
       let consultaId: ConsultaId;
       try {
-        consultaId = ConsultaId.reconstituir(command.consultaId);
-      } catch {
-        // Formato inválido o no encontrado -> no reintentar
+        consultaId = ConsultaId.desdeUuidCanonico(command.consultaId);
+      } catch (err: unknown) {
+        // Formato inválido -> no reintentar, registrar log WARN estructurado sin PII
+        this.logger.warn({
+          message:
+            '[RevertirCierrePorRechazoUseCase] Formato de consultaId inválido en evento de rechazo. Descartando.',
+          eventId: command.eventId,
+          consultaId: command.consultaId,
+          error: err instanceof Error ? err.message : String(err),
+        });
         await this.inboxRepository.guardar(
           {
             eventId: command.eventId,

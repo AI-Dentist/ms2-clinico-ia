@@ -1,7 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Channel, ConsumeMessage } from 'amqplib';
 import { FacturacionRechazadaConsumer } from './facturacion-rechazada.consumer.js';
-import type { RevertirCierrePorRechazoUseCase } from '../../application/use-cases/revertir-cierre-por-rechazo.use-case.js';
+import { RevertirCierrePorRechazoUseCase } from '../../application/use-cases/revertir-cierre-por-rechazo.use-case.js';
+import type { IConsultaOdontologicaRepositoryPort } from '../../domain/ports/consulta-odontologica.repository.port.js';
+import type { IInboxRepositoryPort } from '../../application/ports/inbox-repository.port.js';
+import type { IUnitOfWorkCompensacionPort } from '../../application/ports/unit-of-work-compensacion.port.js';
+import { ConsultaOdontologica } from '../../domain/entities/consulta-odontologica.entity.js';
+import { HistoriaClinicaId } from '../../domain/value-objects/historia-clinica-id.vo.js';
+import { PacienteId } from '../../domain/value-objects/paciente-id.vo.js';
+import { OdontologoId } from '../../domain/value-objects/odontologo-id.vo.js';
+import { MotivoConsulta } from '../../domain/value-objects/motivo-consulta.vo.js';
+import { SnapshotRiesgoClinico } from '../../domain/value-objects/snapshot-riesgo-clinico.vo.js';
+import { ExploracionFisica } from '../../domain/value-objects/exploracion-fisica.vo.js';
+import { DiagnosticoItem } from '../../domain/value-objects/diagnostico-item.vo.js';
+import { TipoDiagnostico } from '../../domain/value-objects/tipo-diagnostico.enum.js';
+import { EstadoConsulta } from '../../domain/value-objects/estado-consulta.enum.js';
+import { ServicioFacturableConsulta } from '../../domain/value-objects/servicio-facturable-consulta.vo.js';
+import type { ConsultaId } from '../../domain/value-objects/consulta-id.vo.js';
 
 describe('FacturacionRechazadaConsumer', () => {
   let mockUseCase: { execute: ReturnType<typeof vi.fn> };
@@ -182,5 +197,163 @@ describe('FacturacionRechazadaConsumer', () => {
 
     expect(mockChannel.ack).toHaveBeenCalledWith(mockMsg);
     expect(mockChannel.nack).not.toHaveBeenCalled();
+  });
+
+  it('8. Defecto Real Aceptación: procesarMensaje con UUID canónico pelado debe revertir consulta real a EN_CURSO con rechazoFacturacion', async () => {
+    const mapaConsultas = new Map<string, ConsultaOdontologica>();
+    const inMemoryConsultaRepo: IConsultaOdontologicaRepositoryPort = {
+      guardar: vi.fn(async (c: ConsultaOdontologica) => {
+        mapaConsultas.set(c.id.valor, c);
+      }),
+      buscarPorId: vi.fn(async (id: ConsultaId) => mapaConsultas.get(id.valor) ?? null),
+      buscarPorHistoriaClinicaId: vi.fn(async () => []),
+      buscarPorCitaId: vi.fn(async () => null),
+      actualizar: vi.fn(async (c: ConsultaOdontologica) => {
+        mapaConsultas.set(c.id.valor, c);
+      }),
+    };
+
+    const inboxEventos = new Set<string>();
+    const inMemoryInboxRepo: IInboxRepositoryPort = {
+      existe: vi.fn(async (eventId: string) => inboxEventos.has(eventId)),
+      guardar: vi.fn(async (item: { eventId: string }) => {
+        inboxEventos.add(item.eventId);
+      }),
+    };
+
+    const directUoW: IUnitOfWorkCompensacionPort = {
+      ejecutarCompensacion: async (op) => await op(undefined),
+    };
+
+    const realUseCase = new RevertirCierrePorRechazoUseCase(
+      inMemoryConsultaRepo,
+      inMemoryInboxRepo,
+      directUoW,
+    );
+
+    const integrationConsumer = new FacturacionRechazadaConsumer(
+      realUseCase,
+      undefined,
+      { enabled: false, initialBackoffMs: 0, maxBackoffMs: 0, sleepFn: vi.fn() },
+    );
+
+    // Crear consulta completada
+    const consulta = ConsultaOdontologica.abrir({
+      historiaClinicaId: HistoriaClinicaId.crear('hc_123'),
+      pacienteId: PacienteId.crear('pac_123'),
+      odontologoId: OdontologoId.crear('od_001'),
+      versionHistoriaReferenciada: 1,
+      snapshotRiesgoClinico: SnapshotRiesgoClinico.vacio(),
+      motivoConsulta: MotivoConsulta.crear('Dolor agudo en pieza molar'),
+      exploracionFisica: ExploracionFisica.crear({
+        inspeccionIntraoral: 'Cavidad profunda en cara oclusal de pieza 16',
+      }),
+      diagnosticos: [
+        DiagnosticoItem.crear({
+          codigoCIE: 'K02.1',
+          descripcion: 'Caries de la dentina',
+          tipo: TipoDiagnostico.DEFINITIVO,
+        }),
+      ],
+      fechaAtencion: new Date('2026-11-05T08:00:00.000Z'),
+    });
+
+    consulta.completar(
+      OdontologoId.crear('od_001'),
+      {
+        serviciosFacturables: [
+          ServicioFacturableConsulta.crear({
+            servicioId: '550e8400-e29b-41d4-a716-446655440001',
+            codigo: 'REST-01',
+            nombre: 'Restauración Resina',
+            precioUnitarioBs: '120.00',
+            cantidad: 1,
+            piezaDental: 16,
+          }),
+        ],
+        ahora: new Date('2026-11-05T09:00:00.000Z'),
+      },
+    );
+
+    const outboxCierreId = '33333333-3333-4333-8333-333333333333';
+    consulta.asignarUltimoOutboxEventId(outboxCierreId);
+    await inMemoryConsultaRepo.guardar(consulta);
+
+    // El ERP envía consultaId como UUID puro (toCanonicalUuid), sin prefijo cons_
+    const bareUuid = consulta.id.toCanonicalUuid();
+    expect(bareUuid.startsWith('cons_')).toBe(false);
+
+    const payloadRechazo = {
+      eventId: '99999999-9999-4999-8999-999999999999',
+      consultaId: bareUuid, // UUID CANÓNICO PELADO
+      consultaFinalizadaEventId: outboxCierreId,
+      motivoCodigo: 'SERVICIO_INACTIVO',
+      motivo: 'El servicio REST-01 se encuentra inactivo en el ERP',
+      rechazadaEn: '2026-11-05T09:10:00.000Z',
+    };
+
+    const mockMsg = {
+      content: Buffer.from(JSON.stringify(payloadRechazo)),
+      properties: {},
+      fields: {},
+    } as unknown as ConsumeMessage;
+
+    await integrationConsumer.procesarMensaje(mockMsg, mockChannel as unknown as Channel);
+
+    expect(mockChannel.ack).toHaveBeenCalledWith(mockMsg);
+
+    // Invariante de negocio: la consulta DEBE estar en EN_CURSO y tener rechazoFacturacion registrado
+    const consultaRevisada = await inMemoryConsultaRepo.buscarPorId(consulta.id);
+    expect(consultaRevisada?.estado).toBe(EstadoConsulta.EN_CURSO);
+    expect(consultaRevisada?.rechazoFacturacion).toBeDefined();
+    expect(consultaRevisada?.rechazoFacturacion?.motivoCodigo).toBe('SERVICIO_INACTIVO');
+    expect(consultaRevisada?.rechazoFacturacion?.motivo).toBe('El servicio REST-01 se encuentra inactivo en el ERP');
+  });
+
+  it('9. Rama de ID inválido: debe emitir log WARN estructurado con eventId y consultaId (sin PII)', async () => {
+    const mapaConsultas = new Map<string, ConsultaOdontologica>();
+    const inMemoryConsultaRepo: IConsultaOdontologicaRepositoryPort = {
+      guardar: vi.fn(),
+      buscarPorId: vi.fn(async (id: ConsultaId) => mapaConsultas.get(id.valor) ?? null),
+      buscarPorHistoriaClinicaId: vi.fn(async () => []),
+      buscarPorCitaId: vi.fn(async () => null),
+      actualizar: vi.fn(),
+    };
+
+    const inMemoryInboxRepo: IInboxRepositoryPort = {
+      existe: vi.fn(async () => false),
+      guardar: vi.fn(async () => {}),
+    };
+
+    const directUoW: IUnitOfWorkCompensacionPort = {
+      ejecutarCompensacion: async (op) => await op(undefined),
+    };
+
+    const realUseCase = new RevertirCierrePorRechazoUseCase(
+      inMemoryConsultaRepo,
+      inMemoryInboxRepo,
+      directUoW,
+    );
+
+    const useCaseWarnSpy = vi.spyOn((realUseCase as any).logger, 'warn');
+
+    const res = await realUseCase.execute({
+      eventId: '99999999-9999-4999-8999-999999999999',
+      consultaId: 'invalid-non-uuid-and-non-cons',
+      consultaFinalizadaEventId: '33333333-3333-4333-8333-333333333333',
+      motivoCodigo: 'SERVICIO_INACTIVO',
+      motivo: 'Motivo prueba',
+      rechazadaEn: '2026-11-05T09:10:00.000Z',
+    });
+
+    expect(res.revertido).toBe(false);
+    expect(res.motivo).toBe('CONSULTA_NO_ENCONTRADA');
+    expect(useCaseWarnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Formato de consultaId inválido'),
+        eventId: '99999999-9999-4999-8999-999999999999',
+        consultaId: 'invalid-non-uuid-and-non-cons',
+      }),
+    );
   });
 });

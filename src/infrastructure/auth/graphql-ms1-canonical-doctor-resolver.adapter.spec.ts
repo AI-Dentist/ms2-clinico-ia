@@ -5,6 +5,7 @@ import {
   OBTENER_MI_ODONTOLOGO_ID_QUERY,
 } from './graphql-ms1-canonical-doctor-resolver.adapter.js';
 import { AutenticacionRequeridaError } from '../../modules/historias-clinicas/application/errors/autenticacion-requerida.error.js';
+import { ServicioIdentidadNoDisponibleError } from './servicio-identidad-no-disponible.error.js';
 
 describe('GraphqlMs1CanonicalDoctorResolverAdapter (Public Contract & Invariants)', () => {
   let adapter: GraphqlMs1CanonicalDoctorResolverAdapter;
@@ -198,13 +199,36 @@ describe('GraphqlMs1CanonicalDoctorResolverAdapter (Public Contract & Invariants
     await expect(adapter.resolverOdontologoId(CALLER_TOKEN_A)).rejects.toThrow(/HTTP 403/i);
   });
 
-  it('9. Debe fallar cerrado ante timeout en la consulta a MS1', async () => {
+  it('9. Debe fallar cerrado con ServicioIdentidadNoDisponibleError ante timeout en la consulta a MS1', async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError'));
 
     await expect(adapter.resolverOdontologoId(CALLER_TOKEN_A)).rejects.toThrow(
-      AutenticacionRequeridaError,
+      ServicioIdentidadNoDisponibleError,
     );
     await expect(adapter.resolverOdontologoId(CALLER_TOKEN_A)).rejects.toThrow(/timeout/i);
+  });
+
+  it('9b. Debe fallar cerrado con ServicioIdentidadNoDisponibleError ante error HTTP 5xx de MS1', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      json: async () => ({}),
+    });
+
+    await expect(adapter.resolverOdontologoId(CALLER_TOKEN_A)).rejects.toThrow(
+      ServicioIdentidadNoDisponibleError,
+    );
+    await expect(adapter.resolverOdontologoId(CALLER_TOKEN_A)).rejects.toThrow(/HTTP 500/i);
+  });
+
+  it('9c. Debe fallar cerrado con ServicioIdentidadNoDisponibleError ante fallo de conexión de red', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('fetch failed: connect ECONNREFUSED'));
+
+    await expect(adapter.resolverOdontologoId(CALLER_TOKEN_A)).rejects.toThrow(
+      ServicioIdentidadNoDisponibleError,
+    );
+    await expect(adapter.resolverOdontologoId(CALLER_TOKEN_A)).rejects.toThrow(/red o conexión/i);
   });
 
   it('10. Concurrencia y Aislamiento: Dos llamadores concurrentes no comparten token ni estado', async () => {

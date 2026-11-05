@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ICanonicalDoctorResolver } from './canonical-doctor-resolver.port.js';
 import { AutenticacionRequeridaError } from '../../modules/historias-clinicas/application/errors/autenticacion-requerida.error.js';
+import { ServicioIdentidadNoDisponibleError } from './servicio-identidad-no-disponible.error.js';
 
 export const OBTENER_MI_ODONTOLOGO_ID_QUERY = `query ObtenerMiOdontologoId {
   obtenerMiOdontologoId
@@ -85,13 +86,15 @@ export class GraphqlMs1CanonicalDoctorResolverAdapter implements ICanonicalDocto
           err.message.toLowerCase().includes('timeout') ||
           err.message.toLowerCase().includes('aborted'))
       ) {
-        throw new AutenticacionRequeridaError(
+        throw new ServicioIdentidadNoDisponibleError(
           `Timeout tras ${this.timeoutMs}ms consultando identidad de odontólogo en MS1 (${this.ms1GraphqlUrl}).`,
+          err,
         );
       }
 
-      throw new AutenticacionRequeridaError(
+      throw new ServicioIdentidadNoDisponibleError(
         `Error de red o conexión al consultar identidad de odontólogo en MS1 (${this.ms1GraphqlUrl}): ${err instanceof Error ? err.message : String(err)}`,
+        err,
       );
     }
 
@@ -104,6 +107,12 @@ export class GraphqlMs1CanonicalDoctorResolverAdapter implements ICanonicalDocto
     if (response.status === 403) {
       throw new AutenticacionRequeridaError(
         'MS1 denegó el acceso (HTTP 403): permisos insuficientes para resolver la identidad del odontólogo.',
+      );
+    }
+
+    if (response.status >= 500) {
+      throw new ServicioIdentidadNoDisponibleError(
+        `MS1 respondió con error de servidor HTTP ${response.status} ${response.statusText} al resolver identidad del odontólogo.`,
       );
     }
 
