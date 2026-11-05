@@ -350,4 +350,50 @@ describe('CompletarConsultaUseCase', () => {
       ),
     ).rejects.toThrow(ConflictoConcurrenteConsultaError);
   });
+
+  it('12. debe asignar ultimoOutboxEventId con el ID del OutboxEvent y generar nuevo ID ante re-cierre tras reversión', async () => {
+    const consulta = crearConsultaConRequisitos();
+    mockRepository.buscarPorId.mockResolvedValue(consulta);
+
+    // 1er cierre
+    await useCase.execute(
+      {
+        tokenAutenticacion: 'token_valido',
+        consultaId: consulta.id.valor,
+        versionEsperada: consulta.version,
+        serviciosFacturables: [{ servicioId: SERVICIO_ACTIVO_ID, cantidad: 1 }],
+      },
+      relojCierre,
+    );
+
+    const primerEventoOutbox = mockUnitOfWork.ejecutarCierreConOutbox.mock.calls[0][2] as OutboxEvent;
+    expect(primerEventoOutbox).toBeDefined();
+    expect(consulta.ultimoOutboxEventId).toBe(primerEventoOutbox.id);
+
+    // Simular reversión por rechazo de facturación en el ERP
+    consulta.revertirCierrePorRechazoFacturacion({
+      motivoCodigo: 'SERVICIO_INACTIVO',
+      motivo: 'Servicio inactivo',
+      rechazadaEn: new Date('2026-10-22T11:15:00.000Z'),
+    });
+    expect(consulta.estado).toBe(EstadoConsulta.EN_CURSO);
+
+    // 2do cierre (re-cierre con nuevo OutboxEvent)
+    const relojReCierre = new Date('2026-10-22T11:30:00.000Z');
+    await useCase.execute(
+      {
+        tokenAutenticacion: 'token_valido',
+        consultaId: consulta.id.valor,
+        versionEsperada: consulta.version,
+        serviciosFacturables: [{ servicioId: SERVICIO_ACTIVO_ID, cantidad: 1 }],
+      },
+      relojReCierre,
+    );
+
+    const segundoEventoOutbox = mockUnitOfWork.ejecutarCierreConOutbox.mock.calls[1][2] as OutboxEvent;
+    expect(segundoEventoOutbox).toBeDefined();
+    expect(segundoEventoOutbox.id).not.toBe(primerEventoOutbox.id);
+    expect(consulta.ultimoOutboxEventId).toBe(segundoEventoOutbox.id);
+    expect(consulta.rechazoFacturacion).toBeNull();
+  });
 });

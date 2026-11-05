@@ -39,6 +39,20 @@ export interface AbrirConsultaProps {
   recomendaciones?: string | null;
 }
 
+export interface RechazoFacturacion {
+  motivoCodigo: string;
+  motivo: string;
+  rechazadaEn: Date;
+}
+
+export interface RevertirCierrePorRechazoProps {
+  motivoCodigo: string;
+  motivo: string;
+  rechazadaEn: Date;
+  ahora?: Date;
+  actualizadoPor?: OdontologoId;
+}
+
 export interface ReconstituirConsultaProps {
   id: ConsultaId;
   historiaClinicaId: HistoriaClinicaId;
@@ -60,6 +74,8 @@ export interface ReconstituirConsultaProps {
   evolucionSOAP: EvolucionSOAP;
   recomendaciones: string | null;
   motivoCancelacion: string | null;
+  ultimoOutboxEventId?: string | null;
+  rechazoFacturacion?: RechazoFacturacion | null;
   version: number;
   creadoEn: Date;
   actualizadoEn: Date;
@@ -113,6 +129,8 @@ export class ConsultaOdontologica {
   private _evolucionSOAP: EvolucionSOAP;
   private _recomendaciones: string | null;
   private _motivoCancelacion: string | null;
+  private _ultimoOutboxEventId: string | null;
+  private _rechazoFacturacion: RechazoFacturacion | null;
   private _version: number;
   private readonly _creadoEn: Date;
   private _actualizadoEn: Date;
@@ -173,6 +191,14 @@ export class ConsultaOdontologica {
     this._evolucionSOAP = props.evolucionSOAP;
     this._recomendaciones = props.recomendaciones?.trim() || null;
     this._motivoCancelacion = props.motivoCancelacion?.trim() || null;
+    this._ultimoOutboxEventId = props.ultimoOutboxEventId?.trim() || null;
+    this._rechazoFacturacion = props.rechazoFacturacion
+      ? {
+          motivoCodigo: props.rechazoFacturacion.motivoCodigo,
+          motivo: props.rechazoFacturacion.motivo,
+          rechazadaEn: new Date(props.rechazoFacturacion.rechazadaEn.getTime()),
+        }
+      : null;
     this._version = props.version;
     this._creadoEn = new Date(props.creadoEn.getTime());
     this._actualizadoEn = new Date(props.actualizadoEn.getTime());
@@ -340,6 +366,7 @@ export class ConsultaOdontologica {
     this._serviciosFacturables = serviciosFacturables;
     this._observacionesCobro = observacionesCobro;
     this._cerradaEn = ahora;
+    this._rechazoFacturacion = null;
     this._actualizadoEn = ahora;
     this._actualizadoPor = actualizadoPor;
     this._version += 1;
@@ -368,6 +395,47 @@ export class ConsultaOdontologica {
     this._actualizadoEn = ahora;
     this._actualizadoPor = actualizadoPor;
     this._version += 1;
+  }
+
+  /**
+   * Revierte una consulta COMPLETADA a EN_CURSO por rechazo de facturación en el ERP (Saga T3).
+   * Deshace el cierre clínico sin borrar diagnósticos, procedimientos ni servicios.
+   * Almacena el motivo de rechazo estructurado para que el odontólogo lo visualice y corrija.
+   *
+   * @param props Información del rechazo devuelta por el ERP.
+   * @param ahora Fecha de reloj inyectable.
+   */
+  revertirCierrePorRechazoFacturacion(
+    props: RevertirCierrePorRechazoProps,
+    ahora: Date = new Date(),
+  ): void {
+    if (this._estado !== EstadoConsulta.COMPLETADA) {
+      throw new TransicionEstadoConsultaInvalidaError(
+        this._estado,
+        EstadoConsulta.EN_CURSO,
+      );
+    }
+
+    const timestamp = props.ahora ?? ahora;
+    this._estado = EstadoConsulta.EN_CURSO;
+    this._cerradaEn = null;
+    this._rechazoFacturacion = {
+      motivoCodigo: props.motivoCodigo,
+      motivo: props.motivo.slice(0, 500),
+      rechazadaEn: new Date(props.rechazadaEn.getTime()),
+    };
+    if (props.actualizadoPor) {
+      this._actualizadoPor = props.actualizadoPor;
+    }
+    this._actualizadoEn = timestamp;
+    this._version += 1;
+  }
+
+  /**
+   * Asocia el identificador del evento Outbox vigente que selló el cierre para la guardia de versión.
+   */
+  asignarUltimoOutboxEventId(eventId: string): void {
+    this._ultimoOutboxEventId = eventId?.trim() || null;
   }
 
   // ─── Helpers de Invariantes ─────────────────────────────────────────────────
@@ -494,6 +562,20 @@ export class ConsultaOdontologica {
 
   get actualizadoPor(): OdontologoId {
     return this._actualizadoPor;
+  }
+
+  get ultimoOutboxEventId(): string | null {
+    return this._ultimoOutboxEventId;
+  }
+
+  get rechazoFacturacion(): RechazoFacturacion | null {
+    return this._rechazoFacturacion
+      ? {
+          motivoCodigo: this._rechazoFacturacion.motivoCodigo,
+          motivo: this._rechazoFacturacion.motivo,
+          rechazadaEn: new Date(this._rechazoFacturacion.rechazadaEn.getTime()),
+        }
+      : null;
   }
 
   get estaEnCurso(): boolean {

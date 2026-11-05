@@ -146,6 +146,8 @@ export class CompletarConsultaUseCase {
         ahora,
       });
 
+      consulta.asignarUltimoOutboxEventId(eventoOutbox.id);
+
       await this.unitOfWork.ejecutarCierreConOutbox(
         consulta,
         command.versionEsperada,
