@@ -2,6 +2,9 @@
 dist/
 tsconfig.build.tsbuildinfo
 
+# AI model weights — download with: node scripts/fetch-dental-model.mjs
+models/
+
 # Dependencies
 node_modules/
 
@@ -22,6 +25,7 @@ pnpm-debug.log*
 /scratch/
 
 # OS and IDE files
+.atl/
 .DS_Store
 Thumbs.db
 .idea/

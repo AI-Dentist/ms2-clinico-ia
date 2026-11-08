@@ -6,6 +6,12 @@ import { CnnDentalModelService } from './infrastructure/cnn/cnn-dental-model.ser
 import { ImagePreprocessorService } from './infrastructure/image/image-preprocessor.service.js';
 import { AnalizarRadiografiaUseCase } from './application/use-cases/analizar-radiografia.use-case.js';
 import { IaDiagnosticoController } from './infrastructure/http/controllers/ia-diagnostico.controller.js';
+import {
+  DentalOnnxModelService,
+  DENTAL_ONNX_MODEL_PORT,
+} from './infrastructure/onnx/dental-onnx-model.service.js';
+import { OnnxImagePreprocessorService } from './infrastructure/image/onnx-image-preprocessor.service.js';
+import { AnalizarImagenIaUseCase } from './application/use-cases/analizar-imagen-ia.use-case.js';
 
 @Module({
   imports: [HistoriasClinicasModule, AuthModule],
@@ -17,6 +23,13 @@ import { IaDiagnosticoController } from './infrastructure/http/controllers/ia-di
       provide: IA_DIAGNOSTICO_MODEL_PORT,
       useClass: CnnDentalModelService,
     },
+    DentalOnnxModelService,
+    {
+      provide: DENTAL_ONNX_MODEL_PORT,
+      useExisting: DentalOnnxModelService,
+    },
+    OnnxImagePreprocessorService,
+    AnalizarImagenIaUseCase,
     AnalizarRadiografiaUseCase,
   ],
   exports: [
@@ -24,6 +37,10 @@ import { IaDiagnosticoController } from './infrastructure/http/controllers/ia-di
     IA_DIAGNOSTICO_MODEL_PORT,
     ImagePreprocessorService,
     CnnDentalModelService,
+    DentalOnnxModelService,
+    DENTAL_ONNX_MODEL_PORT,
+    OnnxImagePreprocessorService,
+    AnalizarImagenIaUseCase,
   ],
 })
 export class IaDiagnosticoModule {}
