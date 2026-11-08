@@ -7,6 +7,7 @@ import { EstudiosModule } from './estudios.module.js';
 import { LaboratorioMongo } from './infrastructure/persistence/mongo/schemas/laboratorio.schema.js';
 import { TipoEstudioMongo } from './infrastructure/persistence/mongo/schemas/tipo-estudio.schema.js';
 import { SolicitudEstudioMongo } from './infrastructure/persistence/mongo/schemas/solicitud-estudio.schema.js';
+import { EstudioClinicoMongo } from '../estudio-clinico/infrastructure/persistence/mongo/schemas/estudio-clinico.schema.js';
 import { ConsultaOdontologicaDocument } from '../consultas-odontologicas/infrastructure/persistence/mongo/schemas/consulta-odontologica.schema.js';
 import { HistoriaClinicaDocument } from '../historias-clinicas/infrastructure/persistence/mongo/schemas/historia-clinica.schema.js';
 import { OutboxEventDocument } from '../outbox/infrastructure/persistence/mongo/schemas/outbox-event.schema.js';
@@ -68,6 +69,8 @@ describe('EstudiosModule (NestJS DI & Provider Security Wiring)', () => {
       .overrideProvider(getModelToken(TipoEstudioMongo.name))
       .useValue(mockModel)
       .overrideProvider(getModelToken(SolicitudEstudioMongo.name))
+      .useValue(mockModel)
+      .overrideProvider(getModelToken(EstudioClinicoMongo.name))
       .useValue(mockModel)
       .overrideProvider(getModelToken(ConsultaOdontologicaDocument.name))
       .useValue(mockModel)

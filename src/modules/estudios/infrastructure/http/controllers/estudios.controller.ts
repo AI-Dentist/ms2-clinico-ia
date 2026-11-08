@@ -31,8 +31,7 @@ import {
   RegistrarResultadoEstudioUseCase,
   AdjuntarArchivoEstudioUseCase,
 } from '../../../application/use-cases/solicitudes-estudio.use-cases.js';
-import { AnalizarRadiografiaUseCase } from '../../../../ia-diagnostico/application/use-cases/analizar-radiografia.use-case.js';
-import type { AnalisisRadiografiaDto } from '../../../../ia-diagnostico/application/dtos/analisis-radiografia.dto.js';
+
 import {
   CrearSolicitudEstudioHttpDto,
   CambiarEstadoSolicitudHttpDto,
@@ -56,7 +55,6 @@ export class EstudiosController {
     private readonly cambiarEstadoUseCase: CambiarEstadoSolicitudUseCase,
     private readonly registrarResultadoUseCase: RegistrarResultadoEstudioUseCase,
     private readonly adjuntarArchivoUseCase: AdjuntarArchivoEstudioUseCase,
-    private readonly analizarRadiografiaUseCase: AnalizarRadiografiaUseCase,
   ) {}
 
   @Post('solicitudes')
@@ -188,45 +186,6 @@ export class EstudiosController {
         tamanioBytes: file.size ?? file.buffer.length,
       },
       tokenOdontologo: req.operadorToken || '',
-    });
-  }
-
-  @Post('analizar-radiografia')
-  @Roles('ODONTOLOGO', 'ADMIN')
-  @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('archivo'))
-  @ApiOperation({ summary: 'Analizar radiografía dental mediante Deep Learning CNN' })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        archivo: {
-          type: 'string',
-          format: 'binary',
-          description: 'Radiografía o fotografía dental en formato imagen',
-        },
-      },
-      required: ['archivo'],
-    },
-  })
-  @ApiResponse({ status: 200, description: 'Inferencia de IA calculada exitosamente' })
-  @ApiResponse({ status: 400, description: 'Archivo no proporcionado' })
-  @ApiResponse({ status: 403, description: 'Acceso denegado: rol insuficiente' })
-  async analizarRadiografia(
-    @UploadedFile() file?: Express.Multer.File,
-  ): Promise<AnalisisRadiografiaDto> {
-    if (!file || !file.buffer || file.buffer.length === 0) {
-      throw new BadRequestException(
-        'Debe adjuntar un archivo de imagen radiográfica en el campo multipart "archivo".',
-      );
-    }
-
-    return this.analizarRadiografiaUseCase.execute({
-      buffer: file.buffer,
-      nombreArchivo: file.originalname || 'radiografia.png',
-      mimeType: file.mimetype || 'image/png',
-      tamanioBytes: file.size ?? file.buffer.length,
     });
   }
 }

@@ -10,11 +10,8 @@ import type {
   RegistrarResultadoEstudioUseCase,
   AdjuntarArchivoEstudioUseCase,
 } from '../../../application/use-cases/solicitudes-estudio.use-cases.js';
-import type { AnalizarRadiografiaUseCase } from '../../../../ia-diagnostico/application/use-cases/analizar-radiografia.use-case.js';
 import { PrioridadEstudio } from '../../../domain/enums/prioridad-estudio.enum.js';
 import { EstadoSolicitudEstudio } from '../../../domain/enums/estado-solicitud-estudio.enum.js';
-import { HallazgoIa } from '../../../../ia-diagnostico/domain/enums/hallazgo-ia.enum.js';
-import { SeveridadLesion } from '../../../../ia-diagnostico/domain/enums/severidad-lesion.enum.js';
 import type { SolicitudEstudioDto } from '../../../application/dtos/estudios.dtos.js';
 
 describe('EstudiosController', () => {
@@ -26,7 +23,6 @@ describe('EstudiosController', () => {
   let mockCambiarEstadoUseCase: Partial<CambiarEstadoSolicitudUseCase>;
   let mockRegistrarResultadoUseCase: Partial<RegistrarResultadoEstudioUseCase>;
   let mockAdjuntarArchivoUseCase: Partial<AdjuntarArchivoEstudioUseCase>;
-  let mockAnalizarRadiografiaUseCase: Partial<AnalizarRadiografiaUseCase>;
 
   const mockSolicitudDto: SolicitudEstudioDto = {
     id: 'sol_test_123',
@@ -106,33 +102,6 @@ describe('EstudiosController', () => {
         },
       }),
     };
-    mockAnalizarRadiografiaUseCase = {
-      execute: vi.fn().mockResolvedValue({
-        id: 'an_ia_test',
-        probabilidadCaries: 0.85,
-        probabilidadSano: 0.15,
-        confianza: 0.85,
-        hallazgo: HallazgoIa.CARIES_DETECTADA,
-        severidad: SeveridadLesion.SEVERA,
-        clasificacion: 'Caries cavitada',
-        tiempoInferenciaMs: 12.5,
-        recomendacionClinica: 'Confirmación clínica',
-        modeloInfo: {
-          nombre: 'DeepDental-CNN',
-          arquitectura: 'CNN-2D-DeepDental-v1',
-          version: '1.0.0',
-        },
-        metadataImagen: {
-          nombreArchivo: 'rx.png',
-          mimeType: 'image/png',
-          tamanioBytes: 2048,
-          anchoOriginal: 64,
-          altoOriginal: 64,
-          canales: 1,
-        },
-        fechaAnalisis: '2026-10-30T10:00:00.000Z',
-      }),
-    };
 
     controller = new EstudiosController(
       mockCrearUseCase as CrearSolicitudEstudioUseCase,
@@ -142,7 +111,6 @@ describe('EstudiosController', () => {
       mockCambiarEstadoUseCase as CambiarEstadoSolicitudUseCase,
       mockRegistrarResultadoUseCase as RegistrarResultadoEstudioUseCase,
       mockAdjuntarArchivoUseCase as AdjuntarArchivoEstudioUseCase,
-      mockAnalizarRadiografiaUseCase as AnalizarRadiografiaUseCase,
     );
   });
 
@@ -205,34 +173,5 @@ describe('EstudiosController', () => {
     await expect(controller.adjuntarArchivo('sol_test_123', mockReq, undefined)).rejects.toThrow(
       BadRequestException,
     );
-  });
-
-  it('debe analizar radiografía delegando al servicio de inferencia CNN', async () => {
-    const mockFile: Express.Multer.File = {
-      fieldname: 'archivo',
-      originalname: 'rx.png',
-      encoding: '7bit',
-      mimetype: 'image/png',
-      buffer: Buffer.from('fake-image-bytes'),
-      size: 2048,
-      stream: null as any,
-      destination: '',
-      filename: '',
-      path: '',
-    };
-
-    const res = await controller.analizarRadiografia(mockFile);
-    expect(res.hallazgo).toBe(HallazgoIa.CARIES_DETECTADA);
-    expect(res.probabilidadCaries).toBe(0.85);
-    expect(mockAnalizarRadiografiaUseCase.execute).toHaveBeenCalled();
-  });
-
-  it('debe lanzar BadRequestException al analizar radiografía si file está ausente o vacío', async () => {
-    await expect(controller.analizarRadiografia(undefined)).rejects.toThrow(BadRequestException);
-
-    const emptyFile = {
-      buffer: Buffer.alloc(0),
-    } as any;
-    await expect(controller.analizarRadiografia(emptyFile)).rejects.toThrow(BadRequestException);
   });
 });

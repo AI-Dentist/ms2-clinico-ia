@@ -82,6 +82,61 @@ In coordination with MS3 (Agendamiento & Stock):
 - **Closed / Invalid States**: Appointments in states `CANCELADA`, `COMPLETADA`, `NO_ASISTIO`, or unknown states are rejected with descriptive reasons and leave clinical storage and outbox state unchanged.
 - **Patient Titularity Matching**: The appointment must belong to the patient titular of the clinical record; mismatches are strictly rejected.
 
+## AI Dental Image Diagnostic & Clinical Studies (Task T4 — Specs S8 & S9)
+
+Deep Learning inference pipeline and clinical study persistence for dental radiograph and intraoral image analysis.
+
+### Model Source & License Attribution
+- **Model**: [`liodon-ai/dental-panoramic-detector`](https://huggingface.co/liodon-ai/dental-panoramic-detector) (`best.onnx`, YOLO11-N architecture).
+- **License**: **CC-BY-NC-4.0** (Creative Commons Attribution-NonCommercial 4.0 International).
+  - *Attribution*: Liodon AI dental panoramic detector dataset and YOLO11 weights.
+  - *Non-Commercial*: Authorized for portfolio, educational, research, and non-commercial dental ERP platform demonstration.
+- **Input Resolution**: 640×640 RGB (letterboxed with standard padding value `114/255`, normalized `[0, 1]` via TensorFlow.js / sharp).
+- **Detection Classes**:
+  1. `caries` → mapped to canonical domain label `caries_interproximal_o_oclusal`
+  2. `periapical_lesion` → mapped to canonical domain label `lesion_periapical`
+  3. `impacted_tooth` → mapped to canonical domain label `pieza_retenida_o_impactada`
+- **Explicitly Unsupported Labels**:
+  - `reabsorcion_osea_periodontal`
+  - `restauracion_o_endodoncia_previa`
+  (Declared in `etiquetasNoSoportadas: [...]`; never synthesized or hallucinated).
+- **Normal Structure Policy (`estructura_normal`)**:
+  - Emitted only when no bounding boxes exceed the confidence threshold (`0.45`).
+  - Text explicitly clarifies: *"sin hallazgos detectados por el modelo — no constituye una confirmación clínica"*.
+- **Clinical Limitations & Medical Disclaimer**:
+  - **Decision Support Only**: This model operates as clinical decision support for licensed dental professionals and does not constitute a definitive medical diagnosis. Clinical exploration, probing, and dentist validation are always required.
+
+### Model Download & Verification Script
+Model weights (`best.onnx`, 10.1 MB) are gitignored under `models/dental-panoramic/`.
+Run the automated downloader to fetch and verify the pinned SHA-256:
+```bash
+node scripts/fetch-dental-model.mjs
+```
+- **Pinned SHA-256**: `4cee38b54203634d895ed30a8910f5d7c4cefe22b18f9116b5561d9dd6e83a71`
+- **Environment Variable**: `DENTAL_MODEL_PATH` (defaults to `models/dental-panoramic/best.onnx`).
+- **Fail-Closed Behavior**: If the model file is absent or fails to load, endpoints return HTTP 503 `MODELO_NO_DISPONIBLE` with guidance to run the fetch script. The untrained random-weight CNN is retired from the inference path.
+
+### Public REST Endpoints (`/api/expediente/estudios`)
+
+All endpoints are protected by `OdontologoAuthGuard` and `RolesGuard` (`ODONTOLOGO`, `ADMIN`):
+
+1. **`POST /api/expediente/estudios/analizar-imagen`**
+   - **Payload**: Multipart `archivo` (JPEG, PNG, WebP) OR JSON `{ imagenBase64, mimeType }`.
+   - **Response**: `AnalisisImagenIaDto` (`hallazgos[]`, `etiquetasNoSoportadas`, `confianzaGlobal`, `severidadMaxima`, `aviso`).
+   - **Max file size**: Up to 25 MB supported.
+
+2. **`POST /api/expediente/estudios/analizar-radiografia`**
+   - Backward-compatible alias for `POST /api/expediente/estudios/analizar-imagen` delegating to YOLO11 ONNX inference.
+
+3. **`POST /api/expediente/estudios`**
+   - Persists a new `EstudioClinico` in MongoDB.
+   - **Security Guarantee**: `odontologoId` is strictly extracted from the authenticated JWT context (`req.odontologoActual.odontologoId`). Any value passed in the request body is ignored.
+   - Supports storing base64 image data up to 25 MB.
+
+4. **`GET /api/expediente/estudios/paciente/:pacienteId`**
+   - Retrieves clinical study history for a patient, ordered by `creadoEn: -1`.
+   - **Performance Optimization**: Automatically projects out the heavy `imagenBase64` field (`select('-imagenBase64')`) to keep list responses lightweight.
+
 ## Project setup
 
 ```bash
