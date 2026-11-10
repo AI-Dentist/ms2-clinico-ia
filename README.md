@@ -106,19 +106,23 @@ Deep Learning inference pipeline and clinical study persistence for dental radio
 - **Clinical Limitations & Medical Disclaimer**:
   - **Decision Support Only**: This model operates as clinical decision support for licensed dental professionals and does not constitute a definitive medical diagnosis. Clinical exploration, probing, and dentist validation are always required.
 
-### Model Download & Verification Script
+### Model Download & Verification Script (Integrity & Dual SHA-256 Check)
 Model weights (`best.onnx`, 10.1 MB) are gitignored under `models/dental-panoramic/`.
 Run the automated downloader to fetch and verify the pinned SHA-256:
 ```bash
 node scripts/fetch-dental-model.mjs
 ```
 - **Pinned SHA-256**: `4cee38b54203634d895ed30a8910f5d7c4cefe22b18f9116b5561d9dd6e83a71`
-- **Environment Variable**: `DENTAL_MODEL_PATH` (defaults to `models/dental-panoramic/best.onnx`).
-- **Fail-Closed Behavior**: If the model file is absent or fails to load, endpoints return HTTP 503 `MODELO_NO_DISPONIBLE` with guidance to run the fetch script. The untrained random-weight CNN is retired from the inference path.
+- **Environment Variables**:
+  - `DENTAL_MODEL_PATH`: Location of the model file (defaults to `models/dental-panoramic/best.onnx`).
+  - `DENTAL_MODEL_SHA256`: Expected SHA-256 anchor (defaults to pinned hash).
+  - `DENTAL_MODEL_URL`: Optional download URL override (strictly requires `DENTAL_MODEL_SHA256`).
+- **Downloader Integrity Verification (`scripts/fetch-dental-model.mjs`)**: Compares the downloaded file against the pinned constant. On mismatch, deletes the downloaded file and exits non-zero. It never writes a hash computed from the received file as the trust anchor.
+- **Runtime Model Integrity Verification (`DentalOnnxModelService`)**: Computes the SHA-256 of the model file prior to initializing the ONNX inference session and checks against `DENTAL_MODEL_SHA256` (default: pinned hash). If missing or mismatched, session creation is refused, no fallback model is used, and inference fails closed with HTTP 503 `MODELO_NO_DISPONIBLE`.
 
 ### Public REST Endpoints (`/api/expediente/estudios`)
 
-All endpoints are protected by `OdontologoAuthGuard` and `RolesGuard` (`ODONTOLOGO`, `ADMIN`):
+All active endpoints are protected by `OdontologoAuthGuard` and `RolesGuard` (`ODONTOLOGO`, `ADMIN`):
 
 1. **`POST /api/expediente/estudios/analizar-imagen`**
    - **Payload**: Multipart `archivo` (JPEG, PNG, WebP) OR JSON `{ imagenBase64, mimeType }`.
@@ -136,6 +140,19 @@ All endpoints are protected by `OdontologoAuthGuard` and `RolesGuard` (`ODONTOLO
 4. **`GET /api/expediente/estudios/paciente/:pacienteId`**
    - Retrieves clinical study history for a patient, ordered by `creadoEn: -1`.
    - **Performance Optimization**: Automatically projects out the heavy `imagenBase64` field (`select('-imagenBase64')`) to keep list responses lightweight.
+
+### Retired Legacy Endpoint (`/api/expediente/ia/analizar-radiografia`)
+
+- **`POST /api/expediente/ia/analizar-radiografia`** has been **permanently retired** (`HTTP 410 Gone`).
+- The untrained random-weight CNN (`CnnDentalModelService` / `AnalizarRadiografiaUseCase`) was completely excised from production paths.
+- Responds with `HTTP 410 Gone` and exact payload without reading or analyzing the uploaded image:
+  ```json
+  {
+    "error": "LEGACY_MODEL_RETIRED",
+    "detail": "The untrained CNN endpoint was retired; use the trained detector.",
+    "replacement": "/api/expediente/estudios/analizar-imagen"
+  }
+  ```
 
 ## Project setup
 
