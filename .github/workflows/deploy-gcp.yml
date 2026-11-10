@@ -1,0 +1,18 @@
+name: Deploy MS2 to GCP
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and roll out on GCP
+        env:
+          GCP_SSH_KEY: ${{ secrets.GCP_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$GCP_SSH_KEY" > ~/.ssh/gcp_deploy_key
+          chmod 600 ~/.ssh/gcp_deploy_key
+          ssh -i ~/.ssh/gcp_deploy_key -o StrictHostKeyChecking=accept-new gcpuser@35.237.1.132 'cd ~/deploy/ms2-clinico-ia && git pull --ff-only && docker build -t docker.io/dental/ms2-clinico-ia:prod . && docker save docker.io/dental/ms2-clinico-ia:prod | sudo k3s ctr images import - && sudo k3s kubectl -n dental-erp-prod rollout restart deployment/ms2-clinico'
