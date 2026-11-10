@@ -3,8 +3,9 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
-# The workspace suppresses this install script; enable it only in the image.
-RUN npm rebuild onnxruntime-node --ignore-scripts=false
+# CPU binaries ship in the npm package; do not run its source-only prepare lifecycle.
+RUN node node_modules/onnxruntime-node/script/install --onnxruntime-node-install=skip \
+    && node -e "require('onnxruntime-node'); require('sharp'); require('@tensorflow/tfjs'); console.log('native-ok')"
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
 COPY scripts/fetch-dental-model.mjs ./scripts/fetch-dental-model.mjs

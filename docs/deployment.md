@@ -17,6 +17,8 @@ Set applicable endpoints, credentials, issuer, audience and CORS for the product
 
 Four integrations default to mocks: set `PACIENTE_VALIDATOR_ADAPTER=graphql`, `CATALOGO_SERVICIOS_ADAPTER=graphql`, `CITA_VALIDATOR_ADAPTER=http`, and `RABBITMQ_PUBLISHER_ADAPTER=amqp` for real integrations. `ODONTOLOGO_AUTH_ADAPTER` defaults to `keycloak`; keep it as `keycloak` for production. Defaults are not changed by the image.
 
+The image uses ONNX Runtime's bundled CPU binaries and invokes its published installer with `--onnxruntime-node-install=skip`, avoiding optional CUDA downloads. Do not use `npm rebuild onnxruntime-node`: it invokes a source-only `prepare` script whose TypeScript project files are absent from the published package. The build checks that ONNX Runtime, sharp and TensorFlow.js load before compiling the application.
+
 The image additionally sets `DENTAL_MODEL_PATH` to the SHA-256-verified ONNX model. The model is licensed CC-BY-NC-4.0 (non-commercial use only); verify licensing before production use.
 
 ## Radiograph storage
