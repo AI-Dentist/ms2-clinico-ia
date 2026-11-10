@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import type { Connection } from 'mongoose';
 
@@ -15,6 +15,13 @@ export class AppService {
       database: isConnected ? 'connected' : 'disconnected',
       timestamp: new Date().toISOString(),
     };
+  }
+
+  getReadiness() {
+    if (this.connection?.readyState !== 1) {
+      throw new ServiceUnavailableException('MongoDB is not connected');
+    }
+    return { status: 'ok' };
   }
 
   getHello(): string {
