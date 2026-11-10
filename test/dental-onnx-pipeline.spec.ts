@@ -121,4 +121,43 @@ describe.skipIf(!modelExists)('Dental ONNX Pipeline Integration (Real Model)', (
       }),
     ).rejects.toThrow(ServiceUnavailableException);
   });
+
+  it('throws HTTP 503 MODELO_NO_DISPONIBLE when model SHA-256 verification fails', async () => {
+    const prevSha = process.env.DENTAL_MODEL_SHA256;
+    try {
+      process.env.DENTAL_MODEL_SHA256 =
+        '1111111111111111111111111111111111111111111111111111111111111111';
+      const corruptShaModel = new DentalOnnxModelService();
+      await corruptShaModel.onModuleInit();
+
+      expect(corruptShaModel.isAvailable).toBe(false);
+
+      const corruptShaUseCase = new AnalizarImagenIaUseCase(corruptShaModel, preprocessor);
+      const validBuffer = await sharp({
+        create: {
+          width: 64,
+          height: 64,
+          channels: 3,
+          background: { r: 100, g: 100, b: 100 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      await expect(
+        corruptShaUseCase.execute({
+          buffer: validBuffer,
+          nombreArchivo: 'test.png',
+          mimeType: 'image/png',
+          tamanioBytes: validBuffer.length,
+        }),
+      ).rejects.toThrow(ServiceUnavailableException);
+    } finally {
+      if (prevSha !== undefined) {
+        process.env.DENTAL_MODEL_SHA256 = prevSha;
+      } else {
+        delete process.env.DENTAL_MODEL_SHA256;
+      }
+    }
+  });
 });

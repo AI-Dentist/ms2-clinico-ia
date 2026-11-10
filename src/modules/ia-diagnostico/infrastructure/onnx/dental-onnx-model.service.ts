@@ -5,7 +5,8 @@ import {
   OnModuleInit,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ort from 'onnxruntime-node';
@@ -17,6 +18,13 @@ const REPO_ROOT = path.resolve(__dirname, '../../../../..');
 const DEFAULT_MODEL_PATH = path.join(REPO_ROOT, 'models', 'dental-panoramic', 'best.onnx');
 
 export const DENTAL_ONNX_MODEL_PORT = Symbol('IDentalOnnxModelPort');
+
+/**
+ * Pinned authorized SHA-256 hash for liodon-ai/dental-panoramic-detector (best.onnx)
+ * per S4 spec in platform-infrastructure/odd/tasks/ai-integrity.md.
+ */
+export const PINNED_MODEL_SHA256 =
+  '4cee38b54203634d895ed30a8910f5d7c4cefe22b18f9116b5561d9dd6e83a71';
 
 export const MODEL_CONF_THRESHOLD = 0.45;
 export const MODEL_IOU_THRESHOLD = 0.35;
@@ -34,6 +42,8 @@ export class DentalOnnxModelService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DentalOnnxModelService.name);
   private session: ort.InferenceSession | null = null;
   private modelAvailable = false;
+  private failureReason: 'NOT_INITIALIZED' | 'FILE_NOT_FOUND' | 'HASH_MISMATCH' | 'SESSION_ERROR' =
+    'NOT_INITIALIZED';
   private inputName = 'images';
   private outputName = 'output0';
 
@@ -49,11 +59,37 @@ export class DentalOnnxModelService implements OnModuleInit, OnModuleDestroy {
           `Inference will return 503 until the model is available.`,
       );
       this.modelAvailable = false;
+      this.session = null;
+      this.failureReason = 'FILE_NOT_FOUND';
       return;
     }
 
+    const expectedSha256 = (
+      process.env.DENTAL_MODEL_SHA256 ?? PINNED_MODEL_SHA256
+    )
+      .toLowerCase()
+      .trim();
+
     try {
-      this.logger.log(`Loading ONNX model from: ${modelPath}`);
+      const fileBytes = readFileSync(modelPath);
+      const actualSha256 = createHash('sha256')
+        .update(fileBytes)
+        .digest('hex')
+        .toLowerCase();
+
+      if (actualSha256 !== expectedSha256) {
+        this.logger.error(
+          `ONNX model SHA-256 verification failed at "${modelPath}". ` +
+            `Expected: "${expectedSha256}", actual: "${actualSha256}". ` +
+            `Model session refused for integrity protection.`,
+        );
+        this.modelAvailable = false;
+        this.session = null;
+        this.failureReason = 'HASH_MISMATCH';
+        return;
+      }
+
+      this.logger.log(`Loading ONNX model from: ${modelPath} (SHA-256 verified)`);
       this.session = await ort.InferenceSession.create(modelPath, {
         executionProviders: ['cpu'],
       });
@@ -67,18 +103,22 @@ export class DentalOnnxModelService implements OnModuleInit, OnModuleDestroy {
       }
 
       this.modelAvailable = true;
+      this.failureReason = 'NOT_INITIALIZED';
       this.logger.log(
         `ONNX model loaded. Input: "${this.inputName}", Output: "${this.outputName}"`,
       );
     } catch (err: any) {
       this.logger.error(`Failed to load ONNX model: ${err.message}`);
       this.modelAvailable = false;
+      this.session = null;
+      this.failureReason = 'SESSION_ERROR';
     }
   }
 
   onModuleDestroy(): void {
     this.session = null;
     this.modelAvailable = false;
+    this.failureReason = 'NOT_INITIALIZED';
   }
 
   async runInference(
@@ -86,12 +126,15 @@ export class DentalOnnxModelService implements OnModuleInit, OnModuleDestroy {
     ctx: LetterboxContext,
   ): Promise<OnnxInferenceResult> {
     if (!this.modelAvailable || !this.session) {
+      const mensaje =
+        this.failureReason === 'HASH_MISMATCH'
+          ? 'El modelo de inferencia ONNX no coincide con el hash SHA-256 autorizado (integridad no verificada).'
+          : 'El modelo de inferencia ONNX no está disponible. Descárguelo con: node scripts/fetch-dental-model.mjs';
+
       throw new ServiceUnavailableException({
         statusCode: 503,
         codigo: 'MODELO_NO_DISPONIBLE',
-        mensaje:
-          'El modelo de inferencia ONNX no está disponible. ' +
-          'Descárguelo con: node scripts/fetch-dental-model.mjs',
+        mensaje,
       });
     }
 

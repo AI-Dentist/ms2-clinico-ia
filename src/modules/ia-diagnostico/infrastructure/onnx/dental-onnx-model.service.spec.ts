@@ -2,7 +2,11 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DentalOnnxModelService } from './dental-onnx-model.service.js';
+import { ServiceUnavailableException } from '@nestjs/common';
+import {
+  DentalOnnxModelService,
+  PINNED_MODEL_SHA256,
+} from './dental-onnx-model.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../../../../..');
@@ -20,6 +24,61 @@ describe('DentalOnnxModelService — unit (always)', () => {
     const svc = new DentalOnnxModelService();
     expect(svc.modelName).toBe('liodon-ai/dental-panoramic-detector');
     expect(svc.version).toBe('1.0.0-yolo11n');
+  });
+
+  it('should define pinned expected SHA-256 constant per S4', () => {
+    expect(PINNED_MODEL_SHA256).toBe(
+      '4cee38b54203634d895ed30a8910f5d7c4cefe22b18f9116b5561d9dd6e83a71',
+    );
+  });
+
+  it('should reject loading and throw 503 when SHA-256 mismatches', async () => {
+    const prevSha = process.env.DENTAL_MODEL_SHA256;
+    try {
+      process.env.DENTAL_MODEL_SHA256 =
+        '0000000000000000000000000000000000000000000000000000000000000000';
+      const svc = new DentalOnnxModelService();
+      await svc.onModuleInit();
+
+      expect(svc.isAvailable).toBe(false);
+
+      const fakeData = new Float32Array(1 * 3 * 640 * 640);
+      const fakeCtx = { origWidth: 640, origHeight: 640, scale: 1, padLeft: 0, padTop: 0, inputSize: 640 };
+
+      await expect(svc.runInference(fakeData, fakeCtx)).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    } finally {
+      if (prevSha !== undefined) {
+        process.env.DENTAL_MODEL_SHA256 = prevSha;
+      } else {
+        delete process.env.DENTAL_MODEL_SHA256;
+      }
+    }
+  });
+
+  it('should reject loading and throw 503 when model file is missing', async () => {
+    const prevPath = process.env.DENTAL_MODEL_PATH;
+    try {
+      process.env.DENTAL_MODEL_PATH = '/path/to/non-existent-model.onnx';
+      const svc = new DentalOnnxModelService();
+      await svc.onModuleInit();
+
+      expect(svc.isAvailable).toBe(false);
+
+      const fakeData = new Float32Array(1 * 3 * 640 * 640);
+      const fakeCtx = { origWidth: 640, origHeight: 640, scale: 1, padLeft: 0, padTop: 0, inputSize: 640 };
+
+      await expect(svc.runInference(fakeData, fakeCtx)).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    } finally {
+      if (prevPath !== undefined) {
+        process.env.DENTAL_MODEL_PATH = prevPath;
+      } else {
+        delete process.env.DENTAL_MODEL_PATH;
+      }
+    }
   });
 });
 
