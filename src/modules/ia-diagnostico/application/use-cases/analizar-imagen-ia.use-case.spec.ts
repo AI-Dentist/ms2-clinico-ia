@@ -205,4 +205,51 @@ describe('AnalizarImagenIaUseCase', () => {
       useCase.execute({ buffer: Buffer.from('corrupt'), nombreArchivo: 'bad.bmp', mimeType: 'image/bmp', tamanioBytes: 100 }),
     ).rejects.toThrow(BadRequestException);
   });
+
+  describe('S2 & S3 Regression Suites', () => {
+    it('S2: nunca convierte "sin detecciones" en "paciente sano" (estructura_normal con advertencia no-definitiva)', async () => {
+      (mockOnnx.runInference as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        detections: [],
+        modelName: 'liodon-ai/dental-panoramic-detector',
+        version: '1.0.0-yolo11n',
+        inferenceMs: 30,
+      });
+
+      const result = await useCase.execute({
+        buffer: Buffer.from('fake'),
+        nombreArchivo: 'rx.png',
+        mimeType: 'image/png',
+        tamanioBytes: 512,
+      });
+
+      expect(result.hallazgos).toHaveLength(1);
+      const hallazgo = result.hallazgos[0]!;
+      expect(hallazgo.etiqueta).toBe('estructura_normal');
+      expect(hallazgo.etiqueta).not.toBe('sano');
+      expect(hallazgo.etiqueta).not.toBe('paciente_sano');
+      expect(hallazgo.recomendacionClinica).toBe(
+        'sin hallazgos detectados por el modelo — no constituye una confirmación clínica.',
+      );
+      expect(hallazgo.recomendacionClinica.toLowerCase()).not.toContain('paciente sano');
+      expect(result.confianzaGlobal).toBe(0);
+      expect(result.severidadMaxima).toBe('NINGUNA');
+    });
+
+    it('S3: declara explícitamente qué categorías soporta y cuáles no (etiquetasNoSoportadas)', async () => {
+      const result = await useCase.execute({
+        buffer: Buffer.from('fake'),
+        nombreArchivo: 'rx.png',
+        mimeType: 'image/png',
+        tamanioBytes: 512,
+      });
+
+      expect(result.etiquetasNoSoportadas).toEqual([
+        'reabsorcion_osea_periodontal',
+        'restauracion_o_endodoncia_previa',
+      ]);
+      expect(result.etiquetasNoSoportadas).not.toContain('caries_interproximal_o_oclusal');
+      expect(result.etiquetasNoSoportadas).not.toContain('lesion_periapical');
+      expect(result.etiquetasNoSoportadas).not.toContain('pieza_retenida_o_impactada');
+    });
+  });
 });
